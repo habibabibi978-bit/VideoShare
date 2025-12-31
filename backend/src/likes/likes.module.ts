@@ -1,17 +1,12 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { LikesService } from './likes.service';
 import { LikesController } from './likes.controller';
-import { Like, LikeSchema } from '../schemas/like.schema';
-import { Video, VideoSchema } from '../schemas/video.schema';
+import { Like } from '../entities/like.entity';
+import { Video } from '../entities/video.entity';
 
 @Module({
-  imports: [
-    MongooseModule.forFeature([
-      { name: Like.name, schema: LikeSchema },
-      { name: Video.name, schema: VideoSchema },
-    ]),
-  ],
+  imports: [TypeOrmModule.forFeature([Like, Video])],
   controllers: [LikesController],
   providers: [LikesService],
   exports: [LikesService],

@@ -6,11 +6,8 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
-  ManyToMany,
-  JoinTable,
 } from 'typeorm';
 import { User } from './user.entity';
-import { Playlist } from './playlist.entity';
 
 @Entity('videos')
 export class Video {
@@ -53,8 +50,5 @@ export class Video {
 
   @UpdateDateColumn()
   updatedAt: Date;
-
-  @ManyToMany(() => Playlist, (playlist) => playlist.videos)
-  playlists: Playlist[];
 }
 

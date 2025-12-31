@@ -4,52 +4,65 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { User, UserDocument } from '../schemas/user.schema';
+import { User } from '../entities/user.entity';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
-import { Video, VideoDocument } from '../schemas/video.schema';
-import { Subscription, SubscriptionDocument } from '../schemas/subscription.schema';
-import { WatchHistory, WatchHistoryDocument } from '../schemas/watch-history.schema';
+import { Video } from '../entities/video.entity';
+import { Subscription } from '../entities/subscription.entity';
+import { WatchHistory } from '../entities/watch-history.entity';
 
 @Injectable()
 export class UsersService {
   constructor(
-    @InjectModel(User.name) private userModel: Model<UserDocument>,
-    @InjectModel(Video.name) private videoModel: Model<VideoDocument>,
-    @InjectModel(Subscription.name) private subscriptionModel: Model<SubscriptionDocument>,
-    @InjectModel(WatchHistory.name) private watchHistoryModel: Model<WatchHistoryDocument>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+    @InjectRepository(Video)
+    private videoRepository: Repository<Video>,
+    @InjectRepository(Subscription)
+    private subscriptionRepository: Repository<Subscription>,
+    @InjectRepository(WatchHistory)
+    private watchHistoryRepository: Repository<WatchHistory>,
   ) {}
 
-  async findById(id: string): Promise<UserDocument> {
-    const user = await this.userModel.findById(id).select('-password');
+  async findById(id: string): Promise<User> {
+    const user = await this.userRepository.findOne({
+      where: { id },
+      select: ['id', 'username', 'email', 'fullname', 'avatar', 'coverImage', 'about', 'isEmailVerified', 'googleId', 'subscribersCount', 'videosCount', 'totalViews', 'createdAt', 'updatedAt'],
+    });
     if (!user) {
       throw new NotFoundException('User not found');
     }
     return user;
   }
 
-  async findByEmail(email: string): Promise<UserDocument | null> {
-    return this.userModel.findOne({ email: email.toLowerCase() });
+  async findByEmail(email: string): Promise<User | null> {
+    return this.userRepository.findOne({
+      where: { email: email.toLowerCase() },
+    });
   }
 
-  async findByUsername(username: string): Promise<UserDocument | null> {
-    return this.userModel.findOne({ username: username.toLowerCase() });
+  async findByUsername(username: string): Promise<User | null> {
+    return this.userRepository.findOne({
+      where: { username: username.toLowerCase() },
+    });
   }
 
-  async findByGoogleId(googleId: string): Promise<UserDocument | null> {
-    return this.userModel.findOne({ googleId });
+  async findByGoogleId(googleId: string): Promise<User | null> {
+    return this.userRepository.findOne({
+      where: { googleId },
+    });
   }
 
-  async create(userData: Partial<User>): Promise<UserDocument> {
+  async create(userData: Partial<User>): Promise<User> {
     if (!userData.email || !userData.username) {
       throw new BadRequestException('Email and username are required');
     }
 
-    const existingUser = await this.userModel.findOne({
-      $or: [
+    const existingUser = await this.userRepository.findOne({
+      where: [
         { email: userData.email.toLowerCase() },
         { username: userData.username.toLowerCase() },
       ],
@@ -63,15 +76,15 @@ export class UsersService {
       userData.password = await bcrypt.hash(userData.password, 10);
     }
 
-    const user = new this.userModel({
+    const user = this.userRepository.create({
       ...userData,
       email: userData.email.toLowerCase(),
       username: userData.username.toLowerCase(),
     });
-    return user.save();
+    return this.userRepository.save(user);
   }
 
-  async update(id: string, updateData: UpdateUserDto): Promise<UserDocument> {
+  async update(id: string, updateData: UpdateUserDto): Promise<User> {
     const user = await this.findById(id);
     
     if (updateData.email && updateData.email !== user.email) {
@@ -86,11 +99,13 @@ export class UsersService {
     if (updateData.fullname) user.fullname = updateData.fullname;
     if (updateData.about !== undefined) user.about = updateData.about;
 
-    return user.save();
+    return this.userRepository.save(user);
   }
 
   async changePassword(id: string, changePasswordDto: ChangePasswordDto): Promise<void> {
-    const user = await this.userModel.findById(id);
+    const user = await this.userRepository.findOne({
+      where: { id },
+    });
     if (!user || !user.password) {
       throw new BadRequestException('Invalid user or password not set');
     }
@@ -104,43 +119,61 @@ export class UsersService {
     }
 
     user.password = await bcrypt.hash(changePasswordDto.newPassword, 10);
-    await user.save();
+    await this.userRepository.save(user);
   }
 
-  async updateAvatar(id: string, avatarUrl: string): Promise<UserDocument> {
+  async updateGoogleId(id: string, googleId: string, avatar?: string): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    user.googleId = googleId;
+    if (avatar && !user.avatar) {
+      user.avatar = avatar;
+    }
+    return this.userRepository.save(user);
+  }
+
+  async updateAvatar(id: string, avatarUrl: string): Promise<User> {
     const user = await this.findById(id);
     user.avatar = avatarUrl;
-    return user.save();
+    return this.userRepository.save(user);
   }
 
-  async updateCoverImage(id: string, coverImageUrl: string): Promise<UserDocument> {
+  async updateCoverImage(id: string, coverImageUrl: string): Promise<User> {
     const user = await this.findById(id);
     user.coverImage = coverImageUrl;
-    return user.save();
+    return this.userRepository.save(user);
   }
 
   async getProfile(username: string, currentUserId?: string) {
-    const user = await this.userModel.findOne({ username: username.toLowerCase() });
+    const user = await this.userRepository.findOne({
+      where: { username: username.toLowerCase() },
+    });
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    const videos = await this.videoModel.find({ owner: user._id, isPublished: true });
-    const subscribersCount = await this.subscriptionModel.countDocuments({
-      channel: user._id,
+    const videos = await this.videoRepository.find({
+      where: { ownerId: user.id, isPublished: true },
+    });
+    const subscribersCount = await this.subscriptionRepository.count({
+      where: { channelId: user.id },
     });
 
     let isSubscribed = false;
     if (currentUserId) {
-      const subscription = await this.subscriptionModel.findOne({
-        subscriber: currentUserId,
-        channel: user._id,
+      const subscription = await this.subscriptionRepository.findOne({
+        where: {
+          subscriberId: currentUserId,
+          channelId: user.id,
+        },
       });
       isSubscribed = !!subscription;
     }
 
     return {
-      ...user.toObject(),
+      ...user,
       subscribersCount,
       isSubscribed,
       videosCount: videos.length,
@@ -148,57 +181,69 @@ export class UsersService {
   }
 
   async getUserVideos(username: string) {
-    const user = await this.userModel.findOne({ username: username.toLowerCase() });
+    const user = await this.userRepository.findOne({
+      where: { username: username.toLowerCase() },
+    });
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    const videos = await this.videoModel
-      .find({ owner: user._id, isPublished: true })
-      .populate('owner', 'username fullname avatar')
-      .sort({ createdAt: -1 });
+    const videos = await this.videoRepository.find({
+      where: { ownerId: user.id, isPublished: true },
+      relations: ['owner'],
+      order: { createdAt: 'DESC' },
+    });
 
     return videos;
   }
 
   async getWatchHistory(userId: string) {
-    const history = await this.watchHistoryModel
-      .find({ user: userId })
-      .populate({
-        path: 'video',
-        populate: { path: 'owner', select: 'username fullname avatar' },
-      })
-      .sort({ createdAt: -1 })
-      .limit(50);
+    const history = await this.watchHistoryRepository.find({
+      where: { userId },
+      relations: ['video', 'video.owner'],
+      order: { createdAt: 'DESC' },
+      take: 50,
+    });
 
     return history.map((item) => item.video);
   }
 
   async updateWatchHistory(userId: string, videoId: string): Promise<void> {
-    await this.watchHistoryModel.findOneAndUpdate(
-      { user: userId, video: videoId },
-      { user: userId, video: videoId },
-      { upsert: true, new: true },
-    );
+    const existing = await this.watchHistoryRepository.findOne({
+      where: { userId, videoId },
+    });
+
+    if (!existing) {
+      const watchHistory = this.watchHistoryRepository.create({
+        userId,
+        videoId,
+      });
+      await this.watchHistoryRepository.save(watchHistory);
+    }
   }
 
   async deleteWatchHistory(userId: string, videoId?: string): Promise<void> {
     if (videoId) {
-      await this.watchHistoryModel.deleteOne({ user: userId, video: videoId });
+      await this.watchHistoryRepository.delete({ userId, videoId });
     } else {
-      await this.watchHistoryModel.deleteMany({ user: userId });
+      await this.watchHistoryRepository.delete({ userId });
     }
   }
 
   async deleteAccount(id: string): Promise<void> {
-    await this.userModel.findByIdAndDelete(id);
-    await this.videoModel.deleteMany({ owner: id });
-    await this.subscriptionModel.deleteMany({ $or: [{ subscriber: id }, { channel: id }] });
-    await this.watchHistoryModel.deleteMany({ user: id });
+    await this.userRepository.delete(id);
+    await this.videoRepository.delete({ ownerId: id });
+    await this.subscriptionRepository.delete([
+      { subscriberId: id },
+      { channelId: id },
+    ]);
+    await this.watchHistoryRepository.delete({ userId: id });
   }
 
   async verifyEmail(userId: string, token: string): Promise<void> {
-    const user = await this.userModel.findById(userId);
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -214,8 +259,6 @@ export class UsersService {
     user.isEmailVerified = true;
     user.emailVerificationToken = null as any;
     user.emailVerificationExpires = null as any;
-    await user.save();
+    await this.userRepository.save(user);
   }
 }
-
-

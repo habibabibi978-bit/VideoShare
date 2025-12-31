@@ -1,17 +1,12 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { SubscriptionsService } from './subscriptions.service';
 import { SubscriptionsController } from './subscriptions.controller';
-import { Subscription, SubscriptionSchema } from '../schemas/subscription.schema';
-import { User, UserSchema } from '../schemas/user.schema';
+import { Subscription } from '../entities/subscription.entity';
+import { User } from '../entities/user.entity';
 
 @Module({
-  imports: [
-    MongooseModule.forFeature([
-      { name: Subscription.name, schema: SubscriptionSchema },
-      { name: User.name, schema: UserSchema },
-    ]),
-  ],
+  imports: [TypeOrmModule.forFeature([Subscription, User])],
   controllers: [SubscriptionsController],
   providers: [SubscriptionsService],
   exports: [SubscriptionsService],

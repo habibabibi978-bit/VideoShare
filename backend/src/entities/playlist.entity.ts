@@ -30,7 +30,7 @@ export class Playlist {
   @Column({ type: 'text', default: '' })
   description: string;
 
-  @ManyToMany(() => Video, (video) => video.playlists)
+  @ManyToMany(() => Video)
   @JoinTable({
     name: 'playlist_videos',
     joinColumn: { name: 'playlistId', referencedColumnName: 'id' },

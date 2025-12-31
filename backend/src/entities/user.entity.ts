@@ -43,11 +43,11 @@ export class User {
   @Column({ default: false })
   isEmailVerified: boolean;
 
-  @Column({ nullable: true })
-  emailVerificationToken: string;
+  @Column({ nullable: true, type: 'varchar' })
+  emailVerificationToken: string | null;
 
   @Column({ nullable: true, type: 'timestamp' })
-  emailVerificationExpires: Date;
+  emailVerificationExpires: Date | null;
 
   @Column({ nullable: true, unique: true })
   googleId: string;

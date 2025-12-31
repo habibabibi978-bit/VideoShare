@@ -47,12 +47,12 @@ export class AuthService {
     });
 
     // Send verification email
-    await this.sendVerificationEmail(user.email, user._id.toString(), verificationToken);
+    await this.sendVerificationEmail(user.email, user.id, verificationToken);
 
-    const tokens = await this.generateTokens(user._id.toString(), user.email);
+    const tokens = await this.generateTokens(user.id, user.email);
     return {
       user: {
-        _id: user._id,
+        _id: user.id,
         username: user.username,
         email: user.email,
         fullname: user.fullname,
@@ -73,10 +73,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const tokens = await this.generateTokens(user._id.toString(), user.email);
+    const tokens = await this.generateTokens(user.id, user.email);
     return {
       user: {
-        _id: user._id,
+        _id: user.id,
         username: user.username,
         email: user.email,
         fullname: user.fullname,
@@ -92,9 +92,7 @@ export class AuthService {
     if (!user) {
       user = await this.usersService.findByEmail(googleUser.email);
       if (user) {
-        user.googleId = googleUser.googleId;
-        if (!user.avatar) user.avatar = googleUser.avatar;
-        await user.save();
+        user = await this.usersService.updateGoogleId(user.id, googleUser.googleId, googleUser.avatar);
       } else {
         const username = googleUser.email.split('@')[0] + Math.floor(Math.random() * 1000);
         user = await this.usersService.create({
@@ -108,10 +106,10 @@ export class AuthService {
       }
     }
 
-    const tokens = await this.generateTokens(user._id.toString(), user.email);
+    const tokens = await this.generateTokens(user.id, user.email);
     return {
       user: {
-        _id: user._id,
+        _id: user.id,
         username: user.username,
         email: user.email,
         fullname: user.fullname,

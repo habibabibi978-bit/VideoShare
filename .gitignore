@@ -40,3 +40,14 @@ coverage/
 # Misc
 *.local
 
+# PostgreSQL executables
+*.exe
+edb_*.exe
+postgresql_*.exe
+postgis_*.exe
+pemhttpd.exe
+
+
+
+
+
