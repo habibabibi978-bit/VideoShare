@@ -1,35 +1,49 @@
-# PostgreSQL Database Creation Script
-# This script will create the 'tech-app' database
+# Create PostgreSQL Database - Simple Script
+# Run this after installing PostgreSQL
 
-Write-Host "Creating PostgreSQL database 'tech-app'..." -ForegroundColor Green
+Write-Host "Creating database 'tech-app'..." -ForegroundColor Green
 Write-Host ""
 
-# Try to create database using psql
-# You will be prompted for the postgres user password
-$psqlPath = "C:\Program Files\PostgreSQL\18\bin\psql.exe"
+# Try to find PostgreSQL installation
+$pgPaths = @(
+    "C:\Program Files\PostgreSQL\18\bin\psql.exe",
+    "C:\Program Files\PostgreSQL\17\bin\psql.exe",
+    "C:\Program Files\PostgreSQL\16\bin\psql.exe"
+)
+
+$psqlPath = $null
+foreach ($path in $pgPaths) {
+    if (Test-Path $path) {
+        $psqlPath = $path
+        break
+    }
+}
+
+if (-not $psqlPath) {
+    Write-Host "❌ PostgreSQL not found!" -ForegroundColor Red
+    Write-Host "Please install PostgreSQL first." -ForegroundColor Yellow
+    exit 1
+}
+
+Write-Host "✅ Found PostgreSQL at: $psqlPath" -ForegroundColor Green
+Write-Host ""
+Write-Host "You will be prompted for your PostgreSQL password" -ForegroundColor Yellow
+Write-Host ""
 
 # Create the database
-$createDbCommand = "CREATE DATABASE `"tech-app`";"
+$createDbCommand = 'CREATE DATABASE "tech-app";'
 
-Write-Host "You will be prompted to enter your PostgreSQL password for user 'postgres'" -ForegroundColor Yellow
-Write-Host ""
-
-# Execute psql command
-& $psqlPath -U postgres -c $createDbCommand
+# Use port 24415 (update if your PostgreSQL uses a different port)
+& $psqlPath -U postgres -p 24415 -c $createDbCommand
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""
-    Write-Host "Database 'tech-app' created successfully!" -ForegroundColor Green
+    Write-Host "✅ Database 'tech-app' created successfully!" -ForegroundColor Green
     Write-Host ""
-    Write-Host "Next steps:" -ForegroundColor Cyan
-    Write-Host "1. Update your .env file with PostgreSQL credentials"
-    Write-Host "2. Start your backend: npm run start:dev"
+    Write-Host "Next: Update your .env file with PostgreSQL credentials" -ForegroundColor Cyan
 } else {
     Write-Host ""
-    Write-Host "Error creating database. Please check:" -ForegroundColor Red
-    Write-Host "- PostgreSQL password is correct"
-    Write-Host "- PostgreSQL service is running"
-    Write-Host "- You have permission to create databases"
+    Write-Host "❌ Error creating database." -ForegroundColor Red
+    Write-Host "Check your password and PostgreSQL installation." -ForegroundColor Yellow
 }
-
 

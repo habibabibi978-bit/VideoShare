@@ -68,8 +68,8 @@ const UploadForm = ({ handleCloseDialog }) => {
     const formData = new FormData();
     formData.append('title', title);
     formData.append('description', description);
-    formData.append('video', videoFile);
-    formData.append('thumbnail', thumbnailFile);
+    formData.append('files', videoFile);
+    formData.append('files', thumbnailFile);
 
     try {
       handleCloseDialog();
@@ -82,6 +82,8 @@ const UploadForm = ({ handleCloseDialog }) => {
       setThumbnailFile(null);
     } catch (error) {
       console.error('Upload failed:', error);
+      // Show user-friendly error message
+      alert(error?.message || 'Failed to upload video. Please check your Cloudinary configuration and try again.');
     }
   };
 

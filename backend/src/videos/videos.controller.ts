@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFiles,
   Req,
+  BadRequestException,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -37,19 +38,32 @@ export class VideosController {
     @Body() createVideoDto: CreateVideoDto,
     @UploadedFiles() files: Express.Multer.File[],
   ) {
-    const videoFile = files.find((f) => f.fieldname === 'videoFile' || f.mimetype.startsWith('video/'));
-    const thumbnail = files.find((f) => f.fieldname === 'thumbnail' || f.mimetype.startsWith('image/'));
-
-    if (!videoFile) {
-      throw new Error('Video file is required');
+    if (!files || files.length === 0) {
+      throw new BadRequestException('At least one file is required');
     }
 
-    const videoUrl = await this.cloudinaryService.uploadVideo(videoFile);
-    const thumbnailUrl = thumbnail
-      ? await this.cloudinaryService.uploadImage(thumbnail, 'thumbnails')
-      : '';
+    // Find video file by mimetype (since all files are sent as 'files')
+    const videoFile = files.find((f) => f.mimetype.startsWith('video/'));
+    // Find thumbnail by mimetype
+    const thumbnail = files.find((f) => f.mimetype.startsWith('image/'));
 
-    return this.videosService.create(createVideoDto, req.user.userId, videoUrl, thumbnailUrl);
+    if (!videoFile) {
+      throw new BadRequestException('Video file is required. Please upload a video file.');
+    }
+
+    try {
+      const videoUrl = await this.cloudinaryService.uploadVideo(videoFile);
+      const thumbnailUrl = thumbnail
+        ? await this.cloudinaryService.uploadImage(thumbnail, 'thumbnails')
+        : '';
+
+      return this.videosService.create(createVideoDto, req.user.userId, videoUrl, thumbnailUrl);
+    } catch (error) {
+      if (error.message.includes('Cloudinary is not configured')) {
+        throw new BadRequestException('Cloudinary is not configured. Please configure CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET in your .env file.');
+      }
+      throw new BadRequestException(error.message || 'Failed to upload video');
+    }
   }
 
   @Get()
