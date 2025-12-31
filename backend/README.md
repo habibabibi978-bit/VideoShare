@@ -1,12 +1,12 @@
 # Tech-app Backend
 
-A robust NestJS backend API for the Tech-app video platform built with TypeScript, MongoDB, and REST architecture.
+A robust NestJS backend API for the Tech-app video platform built with TypeScript, PostgreSQL, and REST architecture.
 
 ## 🚀 Tech Stack
 
 - **NestJS** - Progressive Node.js framework
 - **TypeScript** - Type-safe JavaScript
-- **MongoDB** - NoSQL database with Mongoose ODM
+- **PostgreSQL** - Relational database with TypeORM
 - **JWT** - Authentication and authorization
 - **Passport** - Authentication strategies (JWT, Google OAuth)
 - **Cloudinary** - Video and image storage
@@ -32,7 +32,7 @@ src/
 ├── notifications/       # Notifications module
 ├── playlists/           # Playlists module
 ├── cloudinary/          # Cloudinary service
-├── schemas/             # MongoDB schemas
+├── entities/            # TypeORM entities (database models)
 ├── config/              # Configuration files
 └── main.ts              # Application entry point
 ```
@@ -42,7 +42,7 @@ src/
 ### Prerequisites
 
 - Node.js (v18 or higher)
-- MongoDB (local or cloud instance)
+- PostgreSQL (local or cloud instance)
 - Cloudinary account
 - Google OAuth credentials (optional)
 
@@ -60,7 +60,12 @@ src/
    NODE_ENV=development
    FRONTEND_URL=http://localhost:5173
    
-   MONGODB_URI=mongodb://localhost:27017/tech-app
+   # PostgreSQL Database Configuration
+   DB_HOST=localhost
+   DB_PORT=5432
+   DB_USERNAME=postgres
+   DB_PASSWORD=your_postgres_password
+   DB_NAME=tech-app
    
    JWT_SECRET=your-super-secret-jwt-key
    JWT_EXPIRES_IN=7d
@@ -84,8 +89,10 @@ src/
    APP_URL=http://localhost:3000
    ```
 
-3. **Start MongoDB**
-   Make sure MongoDB is running on your system or use a cloud instance.
+3. **Setup PostgreSQL Database**
+   - Create a PostgreSQL database named `tech-app`
+   - See `POSTGRESQL_SETUP.md` for detailed instructions
+   - Make sure PostgreSQL is running on your system
 
 4. **Run the application**
    ```bash

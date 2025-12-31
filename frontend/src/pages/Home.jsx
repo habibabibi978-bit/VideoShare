@@ -16,13 +16,13 @@ const Home = () => {
     dispatch(fetchAllVideos());
   }, [dispatch]);
 
-  const homeVideos = videos?.filter(video => video.owner?._id !== user._id);
+  const homeVideos = Array.isArray(videos) ? videos.filter(video => video.owner?.id !== user?.id) : [];
 
   return (
     <div className={`container p-4`}>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {homeVideos.map((video) => (
-          <VideoCard key={video._id} video={video} />
+          <VideoCard key={video.id || video._id} video={video} />
         ))}
       </div>
       {loading && (

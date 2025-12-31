@@ -21,18 +21,19 @@ const VideoCard = ({ video }) => {
     const [error, setError] = useState(null);   
 
     const handleVideoClick = async () => {
-        await incrementViewCount(video._id);
-        if (video.owner?._id !== user?._id) {
-           
-            await updateWatchHistory(video._id);
-            // dispatch(setUser({ ...user, watchHistory: [video._id, ...user.watchHistory] }));
+        const videoId = video.id || video._id;
+        await incrementViewCount(videoId);
+        const ownerId = video.owner?.id || video.owner?._id;
+        const userId = user?.id || user?._id;
+        if (ownerId !== userId) {
+            await updateWatchHistory(videoId);
         }
     };
 
     const handleDelete = async () => {
         setDeleteConfirmationOpen(false);
         try {
-            dispatch(deleteUserVideo(video._id));
+            dispatch(deleteUserVideo(video.id || video._id));
             setSuccess('Video deleted successfully');
             setError(null);
             
@@ -47,7 +48,7 @@ const VideoCard = ({ video }) => {
     return (
         <div>
             <div className="relative">
-    <NavLink to={`/videos/${video._id}`} onClick={handleVideoClick}>
+    <NavLink to={`/videos/${video.id || video._id}`} onClick={handleVideoClick}>
         <div className="mx-auto h-auto max-w-full pb-10">
             <VideoThumbnail video={video} />
             <div className="flex items-start mt-4">

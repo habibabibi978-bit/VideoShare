@@ -18,7 +18,7 @@ export class Comment {
   @Column({ type: 'uuid' })
   videoId: string;
 
-  @ManyToOne(() => Video, (video) => video.id, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Video, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'videoId' })
   video: Video;
 

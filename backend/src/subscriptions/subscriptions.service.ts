@@ -1,14 +1,16 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Subscription, SubscriptionDocument } from '../schemas/subscription.schema';
-import { User, UserDocument } from '../schemas/user.schema';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Subscription } from '../entities/subscription.entity';
+import { User } from '../entities/user.entity';
 
 @Injectable()
 export class SubscriptionsService {
   constructor(
-    @InjectModel(Subscription.name) private subscriptionModel: Model<SubscriptionDocument>,
-    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectRepository(Subscription)
+    private subscriptionRepository: Repository<Subscription>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
   ) {}
 
   async toggle(channelId: string, subscriberId: string) {
@@ -16,39 +18,51 @@ export class SubscriptionsService {
       throw new BadRequestException('Cannot subscribe to yourself');
     }
 
-    const existingSubscription = await this.subscriptionModel.findOne({
-      subscriber: subscriberId,
-      channel: channelId,
+    const existingSubscription = await this.subscriptionRepository.findOne({
+      where: { subscriberId, channelId },
     });
 
     if (existingSubscription) {
-      await this.subscriptionModel.findByIdAndDelete(existingSubscription._id);
-      await this.userModel.findByIdAndUpdate(channelId, { $inc: { subscribersCount: -1 } });
+      await this.subscriptionRepository.delete(existingSubscription.id);
+      // Update subscribers count
+      const channel = await this.userRepository.findOne({ where: { id: channelId } });
+      if (channel) {
+        channel.subscribersCount = Math.max(0, channel.subscribersCount - 1);
+        await this.userRepository.save(channel);
+      }
       return { subscribed: false };
     } else {
-      await this.subscriptionModel.create({
-        subscriber: subscriberId,
-        channel: channelId,
+      const subscription = this.subscriptionRepository.create({
+        subscriberId,
+        channelId,
       });
-      await this.userModel.findByIdAndUpdate(channelId, { $inc: { subscribersCount: 1 } });
+      await this.subscriptionRepository.save(subscription);
+      // Update subscribers count
+      const channel = await this.userRepository.findOne({ where: { id: channelId } });
+      if (channel) {
+        channel.subscribersCount = (channel.subscribersCount || 0) + 1;
+        await this.userRepository.save(channel);
+      }
       return { subscribed: true };
     }
   }
 
   async getSubscribedChannels(userId: string) {
-    const subscriptions = await this.subscriptionModel
-      .find({ subscriber: userId })
-      .populate('channel', 'username fullname avatar subscribersCount videosCount')
-      .sort({ createdAt: -1 });
+    const subscriptions = await this.subscriptionRepository.find({
+      where: { subscriberId: userId },
+      relations: ['channel'],
+      order: { createdAt: 'DESC' },
+    });
 
     return subscriptions.map((sub) => sub.channel);
   }
 
   async getSubscribers(channelId: string) {
-    const subscriptions = await this.subscriptionModel
-      .find({ channel: channelId })
-      .populate('subscriber', 'username fullname avatar')
-      .sort({ createdAt: -1 });
+    const subscriptions = await this.subscriptionRepository.find({
+      where: { channelId },
+      relations: ['subscriber'],
+      order: { createdAt: 'DESC' },
+    });
 
     return subscriptions.map((sub) => sub.subscriber);
   }

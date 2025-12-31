@@ -6,7 +6,9 @@ export const fetchAllVideos = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await axiosInstance.get(`/videos`);
-      return response.data.data;
+      // API returns { videos, total, page, limit }, extract videos array
+      const data = response.data.data;
+      return Array.isArray(data) ? data : (data?.videos || []);
     } catch (error) {
       if (!error.response) {
         return rejectWithValue({ message: 'Network error. Please try again later.' });

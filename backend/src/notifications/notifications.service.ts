@@ -1,35 +1,38 @@
 import { Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Notification, NotificationDocument } from '../schemas/notification.schema';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Notification } from '../entities/notification.entity';
 
 @Injectable()
 export class NotificationsService {
   constructor(
-    @InjectModel(Notification.name) private notificationModel: Model<NotificationDocument>,
+    @InjectRepository(Notification)
+    private notificationRepository: Repository<Notification>,
   ) {}
 
   async findAll(userId: string) {
-    return this.notificationModel
-      .find({ user: userId })
-      .sort({ createdAt: -1 })
-      .limit(50);
+    return this.notificationRepository.find({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+      take: 50,
+    });
   }
 
   async markAsRead(userId: string) {
-    await this.notificationModel.updateMany(
-      { user: userId, isRead: false },
+    await this.notificationRepository.update(
+      { userId, isRead: false },
       { isRead: true },
     );
   }
 
   async create(userId: string, message: string, type: string, link?: string) {
-    return this.notificationModel.create({
-      user: userId,
+    const notification = this.notificationRepository.create({
+      userId,
       message,
       type,
       link,
     });
+    return this.notificationRepository.save(notification);
   }
 }
 

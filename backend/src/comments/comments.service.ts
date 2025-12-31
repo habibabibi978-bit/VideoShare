@@ -3,59 +3,65 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Comment, CommentDocument } from '../schemas/comment.schema';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Comment } from '../entities/comment.entity';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
 
 @Injectable()
 export class CommentsService {
   constructor(
-    @InjectModel(Comment.name) private commentModel: Model<CommentDocument>,
+    @InjectRepository(Comment)
+    private commentRepository: Repository<Comment>,
   ) {}
 
   async create(videoId: string, userId: string, createCommentDto: CreateCommentDto) {
-    const comment = new this.commentModel({
+    const comment = this.commentRepository.create({
       ...createCommentDto,
-      video: videoId,
-      owner: userId,
+      videoId,
+      ownerId: userId,
     });
-    return comment.save();
+    return this.commentRepository.save(comment);
   }
 
   async findByVideo(videoId: string) {
-    return this.commentModel
-      .find({ video: videoId })
-      .populate('owner', 'username fullname avatar')
-      .sort({ createdAt: -1 });
+    return this.commentRepository.find({
+      where: { videoId },
+      relations: ['owner'],
+      order: { createdAt: 'DESC' },
+    });
   }
 
   async update(id: string, userId: string, updateCommentDto: UpdateCommentDto) {
-    const comment = await this.commentModel.findById(id);
+    const comment = await this.commentRepository.findOne({
+      where: { id },
+    });
     if (!comment) {
       throw new NotFoundException('Comment not found');
     }
 
-    if (comment.owner.toString() !== userId) {
+    if (comment.ownerId !== userId) {
       throw new ForbiddenException('You can only edit your own comments');
     }
 
     comment.content = updateCommentDto.content;
-    return comment.save();
+    return this.commentRepository.save(comment);
   }
 
   async delete(id: string, userId: string) {
-    const comment = await this.commentModel.findById(id);
+    const comment = await this.commentRepository.findOne({
+      where: { id },
+    });
     if (!comment) {
       throw new NotFoundException('Comment not found');
     }
 
-    if (comment.owner.toString() !== userId) {
+    if (comment.ownerId !== userId) {
       throw new ForbiddenException('You can only delete your own comments');
     }
 
-    await this.commentModel.findByIdAndDelete(id);
+    await this.commentRepository.delete(id);
   }
 }
 
