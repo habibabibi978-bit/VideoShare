@@ -19,8 +19,8 @@ const Home = () => {
   const homeVideos = Array.isArray(videos) ? videos.filter(video => video.owner?.id !== user?.id) : [];
 
   return (
-    <div className={`container p-4`}>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="container mx-auto px-4 py-6 max-w-7xl">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
         {homeVideos.map((video) => (
           <VideoCard key={video.id || video._id} video={video} />
         ))}
@@ -31,12 +31,14 @@ const Home = () => {
         </div>
       )}
       {!homeVideos.length && !loading && (
-        <div className='flex items-center justify-center font-extrabold text-4xl'>
-          No Videos Found!
+        <div className='flex items-center justify-center min-h-[400px]'>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-gray-600 dark:text-gray-400 mb-2">No Videos Found!</p>
+            <p className="text-gray-500 dark:text-gray-500">Check back later for new content.</p>
+          </div>
         </div>
       )}
       {error && <ErrorDialog message={error.message} />}
-      
     </div>
   );
 };

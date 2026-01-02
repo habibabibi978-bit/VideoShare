@@ -21,18 +21,25 @@ function Comments() {
 
   useEffect(() => {
     const fetchComments = async () => {
+      if (!videoId) {
+        setLoading(false);
+        return;
+      }
+      
       try {
         setLoading(true);
         const response = await axiosInstance.get(`/comments/${videoId}`);
-        setComments(response.data.data.comments);
-        
+        // Ensure comments is always an array
+        const commentsData = response.data?.data?.comments || response.data?.data || [];
+        setComments(Array.isArray(commentsData) ? commentsData : []);
+        setError(null);
         setLoading(false);
       } catch (error) {
-        setLoading(false);  // to close the dropdown when clicked outside the component or dropdown itself is clicked again to close it 
-
+        setLoading(false);
         console.error('Fetch Error:', error.message || 'Something went wrong');
         setError(error.message || 'Something went wrong');
-       
+        // Set empty array on error to prevent crashes
+        setComments([]);
       }
     };
     fetchComments();
@@ -76,9 +83,12 @@ function Comments() {
   
   
 
+  // Ensure comments is always an array
+  const safeComments = Array.isArray(comments) ? comments : [];
+
   return (
     <div>
-      <h2 className="text-lg font-bold mb-4">{comments.length} Comments</h2>
+      <h2 className="text-lg font-bold mb-4">{safeComments.length} Comments</h2>
       <form className='flex items-center space-x-4 mb-6' onSubmit={handleAddComment}>
         {user?.avatar ? (
           <img src={user.avatar} alt={user.username} className='w-10 h-10 rounded-full' />
@@ -102,9 +112,9 @@ function Comments() {
         </button>
       </form>
       <ul className="space-y-4">
-        {comments.length > 0 && comments.map(comment => (
+        {safeComments.length > 0 && safeComments.map(comment => (
           <CommentLayout
-            key={comment._id}
+            key={comment.id || comment._id}
             comment={comment}
             setComments={setComments}
            

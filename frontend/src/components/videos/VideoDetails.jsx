@@ -18,10 +18,10 @@ const VideoDetails = ({ video }) => {
 const navigate = useNavigate();
 
   const [subscribersCount, setSubscribersCount] = useState(0);
-  const [likeCount, setLikeCount] = useState(video.likes);
+  const [likeCount, setLikeCount] = useState(video?.likes || 0);
   const [isLiked, setIsLiked] = useState(false);
   const [isDisliked, setIsDisliked] = useState(false);
-  const [dislikeCount, setDislikeCount] = useState(video.dislikes);
+  const [dislikeCount, setDislikeCount] = useState(video?.dislikes || 0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
@@ -31,85 +31,200 @@ const navigate = useNavigate();
 
 
   const handleLike = async () => {
-    if (!user?._id) return;
+    if (!user) {
+      console.error('User not logged in');
+      return;
+    }
+
+    const userId = user.id || user._id;
+    const videoId = video.id || video._id;
+
+    if (!userId || !videoId) {
+      console.error('Missing user ID or video ID');
+      return;
+    }
 
     try {
       // Toggle like status
-      await axiosInstance.post(`likes/toggle-video-like/${video._id}`);
+      const response = await axiosInstance.post(`/likes/toggle-video-like/${videoId}`);
       
-      // Update local state
-      if (isLiked) {
-        setLikeCount(likeCount - 1);
+      // Update local state based on response
+      const liked = response.data?.data?.liked ?? response.data?.liked;
+      
+      if (liked !== undefined) {
+        setIsLiked(liked);
+        if (liked) {
+          setLikeCount(likeCount + 1);
+          // Remove dislike if liked
+          if (isDisliked) {
+            setIsDisliked(false);
+            setDislikeCount(Math.max(0, dislikeCount - 1));
+          }
+        } else {
+          setLikeCount(Math.max(0, likeCount - 1));
+        }
       } else {
-        setLikeCount(likeCount + 1);
+        // Fallback: toggle based on current state
+        setIsLiked(!isLiked);
+        if (isLiked) {
+          setLikeCount(Math.max(0, likeCount - 1));
+        } else {
+          setLikeCount(likeCount + 1);
+          if (isDisliked) {
+            setIsDisliked(false);
+            setDislikeCount(Math.max(0, dislikeCount - 1));
+          }
+        }
       }
-      setIsLiked(!isLiked);
 
-      // Remove dislike if liked
-      if (isDisliked) {
-        setIsDisliked(false);
-        setDislikeCount(dislikeCount - 1);
-      }
+      // Refresh liked videos list and video data
+      dispatch(fetchLikedVideos());
+      dispatch(fetchDislikedVideos());
+      
+      // Optionally refresh video data to get updated counts
+      // This ensures counts are accurate
     } catch (error) {
-      console.error('Error:', error.message || 'Something went wrong');
+      console.error('Like error:', error.response?.data || error.message || 'Something went wrong');
+      // Revert state on error
+      setIsLiked(!isLiked);
+      if (isLiked) {
+        setLikeCount(likeCount + 1);
+      } else {
+        setLikeCount(Math.max(0, likeCount - 1));
+      }
+      // Show user-friendly error
+      alert(error.response?.data?.message || 'Failed to like video. Please try again.');
     }
   };
 
   const handleDislike = async () => {
-    if (!user?._id) return;
+    if (!user) {
+      console.error('User not logged in');
+      return;
+    }
+
+    const userId = user.id || user._id;
+    const videoId = video.id || video._id;
+
+    if (!userId || !videoId) {
+      console.error('Missing user ID or video ID');
+      return;
+    }
 
     try {
       // Toggle dislike status
-      await axiosInstance.post(`likes/toggle-video-dislike/${video._id}`);
+      const response = await axiosInstance.post(`/likes/toggle-video-dislike/${videoId}`);
       
-      // Update local state
-      if (isDisliked) {
-        setDislikeCount(dislikeCount - 1);
+      // Update local state based on response
+      const disliked = response.data?.data?.disliked ?? response.data?.disliked;
+      
+      if (disliked !== undefined) {
+        setIsDisliked(disliked);
+        if (disliked) {
+          setDislikeCount(dislikeCount + 1);
+          // Remove like if disliked
+          if (isLiked) {
+            setIsLiked(false);
+            setLikeCount(Math.max(0, likeCount - 1));
+          }
+        } else {
+          setDislikeCount(Math.max(0, dislikeCount - 1));
+        }
       } else {
-        setDislikeCount(dislikeCount + 1);
+        // Fallback: toggle based on current state
+        setIsDisliked(!isDisliked);
+        if (isDisliked) {
+          setDislikeCount(Math.max(0, dislikeCount - 1));
+        } else {
+          setDislikeCount(dislikeCount + 1);
+          if (isLiked) {
+            setIsLiked(false);
+            setLikeCount(Math.max(0, likeCount - 1));
+          }
+        }
       }
-      setIsDisliked(!isDisliked);
 
-      // Remove like if disliked
-      if (isLiked) {
-        setIsLiked(false);
-        setLikeCount(likeCount - 1);
-      }
+      // Refresh disliked videos list and video data
+      dispatch(fetchLikedVideos());
+      dispatch(fetchDislikedVideos());
+      
+      // Optionally refresh video data to get updated counts
+      // This ensures counts are accurate
     } catch (error) {
-      console.error('Error:', error.message || 'Something went wrong');
+      console.error('Dislike error:', error.response?.data || error.message || 'Something went wrong');
+      // Revert state on error
+      setIsDisliked(!isDisliked);
+      if (isDisliked) {
+        setDislikeCount(dislikeCount + 1);
+      } else {
+        setDislikeCount(Math.max(0, dislikeCount - 1));
+      }
+      // Show user-friendly error
+      alert(error.response?.data?.message || 'Failed to dislike video. Please try again.');
     }
   };
 
   useEffect(() => {
     if (video) {
-      setIsLiked(likedVideos.some((v) => v.video?._id === video._id));
-      setIsDisliked(dislikedVideos.some((v) => v.video?._id === video._id));
+      const videoId = video.id || video._id;
+      setIsLiked(likedVideos.some((v) => {
+        const vId = v.video?.id || v.video?._id || v.id || v._id;
+        return vId === videoId;
+      }));
+      setIsDisliked(dislikedVideos.some((v) => {
+        const vId = v.video?.id || v.video?._id || v.id || v._id;
+        return vId === videoId;
+      }));
     }
   }, [video, likedVideos, dislikedVideos]);
 
   useEffect(() => {
     const fetchUserSubscribers = async () => {
+      if (!video || !video.owner) {
+        setLoading(false);
+        return;
+      }
+      
       setLoading(true);
       try {
-        const response = await getUserChannelSubscribers(video.owner._id);
-        if (response && response.subscribers) {
-          const isSubscribed = response.subscribers.some(subscriber => subscriber.subscriber._id === user?._id);
-          setSubscribed(isSubscribed);
-          setSubscribersCount(response.numberOfSubscribers);
-        } else {
-          console.error("Invalid response structure:", response);
+        const channelId = video.owner.id || video.owner._id;
+        if (!channelId) {
+          console.error("Channel ID not found in video.owner");
+          setLoading(false);
+          return;
         }
+        
+        const response = await getUserChannelSubscribers(channelId);
+        // Backend returns { data: [subscribers array] }
+        const subscribers = response?.subscribers || response || [];
+        const subscribersArray = Array.isArray(subscribers) ? subscribers : [];
+        
+        if (subscribersArray.length > 0) {
+          const userId = user?.id || user?._id;
+          const isSubscribed = subscribersArray.some(subscriber => {
+            const subscriberId = subscriber?.id || subscriber?._id;
+            return subscriberId === userId;
+          });
+          setSubscribed(isSubscribed);
+        }
+        
+        // Use subscribers count from video owner or calculate from array
+        setSubscribersCount(video.owner?.subscribersCount || subscribersArray.length || 0);
       } catch (error) {
-        setError(error.message || 'Something went wrong');
+        console.error("Error fetching subscribers:", error);
+        // Fallback to owner's subscribersCount if available
+        setSubscribersCount(video.owner?.subscribersCount || 0);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchUserSubscribers();
+    if (video && video.owner) {
+      fetchUserSubscribers();
+    }
     dispatch(fetchLikedVideos());
     dispatch(fetchDislikedVideos());
-  }, [dispatch]);
+  }, [dispatch, video, user]);
 
  {loading && <Spinner loading={loading} />}
   if (error) {
@@ -122,10 +237,16 @@ const navigate = useNavigate();
   };
 
   const handleSubscription = async () => {
-    if (!user?._id) return;
+    if (!user) return;
+    if (!video || !video.owner) return;
+
+    const userId = user.id || user._id;
+    const channelId = video.owner.id || video.owner._id;
+    
+    if (!userId || !channelId) return;
 
     try {
-      await axiosInstance.post(`subscription/toggle/${video.owner._id}`);
+      await axiosInstance.post(`subscription/toggle/${channelId}`);
       setSubscribed(!subscribed);
       if (subscribed) {
         setSubscribersCount(subscribersCount - 1);
@@ -155,11 +276,17 @@ const navigate = useNavigate();
           <h1 className="text-gray-700">{subscribersCount} subscribers</h1>
         </div>
         {
-          user?._id === video.owner._id ? null : (
-            <button onClick={handleSubscription} className={` px-3 py-2 md:px-4 md:py-3 rounded-full ${subscribed ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-orange-500 hover:bg-orange-600 text-white'}`}>
-                        {subscribed ? 'Unsubscribe' : 'Subscribe'}
-                    </button>
-          )
+          (() => {
+            const userId = user?.id || user?._id;
+            const ownerId = video?.owner?.id || video?.owner?._id;
+            if (!userId || !ownerId || userId === ownerId) return null;
+            
+            return (
+              <button onClick={handleSubscription} className={` px-3 py-2 md:px-4 md:py-3 rounded-full ${subscribed ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-orange-500 hover:bg-orange-600 text-white'}`}>
+                {subscribed ? 'Unsubscribe' : 'Subscribe'}
+              </button>
+            );
+          })()
         }
        
         <div className="flex items-center gap-4 ml-auto">

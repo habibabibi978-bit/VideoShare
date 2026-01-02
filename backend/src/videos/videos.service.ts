@@ -7,7 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like as TypeOrmLike, In, Not } from 'typeorm';
 import { Video } from '../entities/video.entity';
 import { CreateVideoDto } from './dto/create-video.dto';
-import { Like } from '../entities/like.entity';
+import { Like, LikeType } from '../entities/like.entity';
 import { Subscription } from '../entities/subscription.entity';
 
 @Injectable()
@@ -41,7 +41,24 @@ export class VideosService {
       take: limit,
     });
 
-    return { videos, total, page, limit };
+    // Add likes and dislikes counts to each video
+    const videosWithCounts = await Promise.all(
+      videos.map(async (video) => {
+        const likesCount = await this.likeRepository.count({
+          where: { videoId: video.id, type: LikeType.LIKE },
+        });
+        const dislikesCount = await this.likeRepository.count({
+          where: { videoId: video.id, type: LikeType.DISLIKE },
+        });
+        return {
+          ...video,
+          likes: likesCount,
+          dislikes: dislikesCount,
+        };
+      })
+    );
+
+    return { videos: videosWithCounts, total, page, limit };
   }
 
   async findById(id: string) {
@@ -53,7 +70,22 @@ export class VideosService {
     if (!video) {
       throw new NotFoundException('Video not found');
     }
-    return video;
+
+    // Calculate likes and dislikes counts
+    const likesCount = await this.likeRepository.count({
+      where: { videoId: id, type: LikeType.LIKE },
+    });
+
+    const dislikesCount = await this.likeRepository.count({
+      where: { videoId: id, type: LikeType.DISLIKE },
+    });
+
+    // Add likes and dislikes to video object
+    return {
+      ...video,
+      likes: likesCount,
+      dislikes: dislikesCount,
+    };
   }
 
   async findRelated(videoId: string, limit: number = 10) {

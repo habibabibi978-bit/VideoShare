@@ -43,9 +43,13 @@ const UserProfile = () => {
         const fetchUserPlaylists = async () => {
             try {
                 const response = await axiosInstance.get(`/playlist/${username}`);
-                setPlaylists(response.data.data);
+                // Ensure playlists is always an array
+                const playlistsData = response.data?.data;
+                setPlaylists(Array.isArray(playlistsData) ? playlistsData : []);
             } catch (err) {
                 setError(err.response?.data?.message || 'An error occurred');
+                // Set empty array on error to prevent map errors
+                setPlaylists([]);
             }
         };
 
@@ -151,11 +155,13 @@ const UserProfile = () => {
                 {activeSection === 'videos' && (
                     <>
                         {userVideos.length === 0 ? (
-                            <p className="text-center">No videos found.</p>
+                            <div className="text-center py-12">
+                                <p className="text-xl text-gray-600 dark:text-gray-400">No videos found.</p>
+                            </div>
                         ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
                                 {userVideos.map(video => (
-                                    <VideoCard key={video._id} video={video} />
+                                    <VideoCard key={video.id || video._id} video={video} />
                                 ))}
                             </div>
                         )}
@@ -163,13 +169,16 @@ const UserProfile = () => {
                 )}
                 {activeSection === 'playlists' && (
                     <div>
-                        {playlists.length === 0 ? (
+                        {!playlists || playlists.length === 0 ? (
                             <p className="text-center">No playlists found.</p>
                         ) : (
-                            playlists.map(playlist => (
-                                <div key={playlist._id}>
-                                    <h3 className="text-xl font-bold">{playlist.title}</h3>
-                                    <p>{playlist.description}</p>
+                            playlists.map((playlist, index) => (
+                                <div key={playlist?.id || playlist?._id || `playlist-${index}`} className="mb-4 p-4 border rounded">
+                                    <h3 className="text-xl font-bold">{playlist?.name || 'Untitled Playlist'}</h3>
+                                    <p className="text-gray-600">{playlist?.description || 'No description'}</p>
+                                    {playlist?.videos && (
+                                        <p className="text-sm text-gray-500 mt-2">{playlist.videos.length} video(s)</p>
+                                    )}
                                 </div>
                             ))
                         )}

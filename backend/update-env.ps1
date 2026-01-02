@@ -75,3 +75,6 @@ Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "1. Create the database: .\create-database.ps1" -ForegroundColor White
 Write-Host "2. Start backend: npm run start:dev" -ForegroundColor White
 
+
+
+

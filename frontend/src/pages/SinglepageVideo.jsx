@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import axiosInstance from '../utils/axiosInstance';
 import VideoPlayer from '../components/videos/VideoPlayer';
 import VideoDetails from '../components/videos/VideoDetails';
+import VideoActions from '../components/videos/VideoActions';
 import RelatedVideos from '../components/videos/RelatedVideos';
 import Comments from '../components/videos/Comments';
 import Spinner from '../components/Spinner';
@@ -12,6 +13,8 @@ const SinglepageVideo = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [relatedVideos, setRelatedVideos] = useState([]);
+  const [quality, setQuality] = useState('auto');
+  const [subtitle, setSubtitle] = useState('none');
 
   const { id } = useParams();
 
@@ -68,7 +71,8 @@ const SinglepageVideo = () => {
     <div className="flex flex-col md:flex-row">
       {/* Video Player */}
       <div className="md:w-full">
-        {video && <VideoPlayer video={video}/>}
+        {video && <VideoPlayer video={video} quality={quality} subtitle={subtitle} />}
+        {video && <VideoActions video={video} onQualityChange={setQuality} onSubtitleChange={setSubtitle} currentQuality={quality} currentSubtitle={subtitle} />}
         {video && <VideoDetails video={video} />}
         <Comments />
       </div>

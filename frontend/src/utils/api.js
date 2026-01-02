@@ -12,11 +12,21 @@ export const incrementViewCount = async (videoId) => {
 
 export const getUserChannelSubscribers = async (channelId) => {
     try {
+        if (!channelId || channelId === 'undefined') {
+            console.error('Invalid channelId:', channelId);
+            return { subscribers: [], numberOfSubscribers: 0 };
+        }
+        
         const response = await axiosInstance.get(`/subscription/subscribers/${channelId}`);
-        return response.data.data;
-    }catch(error){
+        // Backend returns { data: [array of subscribers] }
+        const subscribers = response.data?.data || [];
+        return {
+            subscribers: Array.isArray(subscribers) ? subscribers : [],
+            numberOfSubscribers: Array.isArray(subscribers) ? subscribers.length : 0
+        };
+    } catch (error) {
         console.error('Error fetching channel subscribers:', error);
-
+        return { subscribers: [], numberOfSubscribers: 0 };
     }
 }
 
