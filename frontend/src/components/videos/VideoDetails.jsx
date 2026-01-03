@@ -1,6 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { BiLike, BiSolidLike, BiDislike, BiSolidDislike } from "react-icons/bi";
 import { MdNotifications, MdNotificationsOff } from "react-icons/md";
+import { HiShare, HiDownload, HiOutlineCheck } from 'react-icons/hi';
+import { FiCopy, FiFlag } from 'react-icons/fi';
+import { 
+  FacebookShareButton, 
+  TwitterShareButton, 
+  WhatsappShareButton,
+  FacebookIcon,
+  TwitterIcon,
+  WhatsappIcon
+} from 'react-share';
 import { useSelector, useDispatch } from 'react-redux';
 import { fetchLikedVideos, fetchDislikedVideos } from '../../features/UserSlice';
 import axiosInstance from '../../utils/axiosInstance';
@@ -10,8 +20,9 @@ import { LuDot } from "react-icons/lu";
 import {useNavigate} from 'react-router-dom';
 import Spinner from '../Spinner';
 import Avatar from '../Avatar';
+import SuccessDialog from '../SuccessDialog';
 
-const VideoDetails = ({ video }) => {
+const VideoDetails = ({ video, showComments = false, onToggleComments, commentsCount: externalCommentsCount, parentCommentsCount: externalParentCommentsCount }) => {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.user.user);
   const likedVideos = useSelector((state) => state.user.likedVideos);
@@ -30,6 +41,17 @@ const navigate = useNavigate();
 
   const [subscribed, setSubscribed] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [showShareMenu, setShowShareMenu] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
+  const [commentsCount, setCommentsCount] = useState(0);
+  const [parentCommentsCount, setParentCommentsCount] = useState(0);
+  
+  // Use external counts if provided (from parent component)
+  const displayCommentsCount = externalCommentsCount !== undefined ? externalCommentsCount : commentsCount;
+  const displayParentCount = externalParentCommentsCount !== undefined ? externalParentCommentsCount : parentCommentsCount;
+  const shareMenuRef = useRef(null);
+  const moreMenuRef = useRef(null);
 
 
   const handleLike = async () => {
@@ -242,6 +264,33 @@ const navigate = useNavigate();
     dispatch(fetchDislikedVideos());
   }, [dispatch, video, user]);
 
+  // Fetch comments count
+  useEffect(() => {
+    const fetchCommentsCount = async () => {
+      if (!video) return;
+      const videoId = video.id || video._id;
+      if (!videoId) return;
+
+      try {
+        const response = await axiosInstance.get(`/comments/${videoId}`);
+        const commentsData = response.data?.data?.data?.comments || response.data?.data?.comments || response.data?.data || [];
+        const comments = Array.isArray(commentsData) ? commentsData : [];
+        // Calculate total including replies
+        const total = comments.reduce((sum, comment) => sum + 1 + (comment.replies?.length || 0), 0);
+        setCommentsCount(total);
+        setParentCommentsCount(comments.length);
+      } catch (error) {
+        console.error('Error fetching comments count:', error);
+        setCommentsCount(0);
+        setParentCommentsCount(0);
+      }
+    };
+
+    if (video) {
+      fetchCommentsCount();
+    }
+  }, [video]);
+
  {loading && <Spinner loading={loading} />}
   if (error) {
     return <div className='text-red-500'>{error}</div>;
@@ -297,93 +346,348 @@ const navigate = useNavigate();
     }
   }
   const profileUrl = `/c/${video.owner.username}`;
+  
+  // Format numbers (e.g., 32000 -> 32k)
+  const formatNumber = (num) => {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+    return num.toString();
+  };
+
+  const videoId = video.id || video._id;
+  const videoUrl = `${window.location.origin}/videos/${videoId}`;
+  const shareTitle = video.title || 'Check out this video!';
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(videoUrl);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+      setShowShareMenu(false);
+    } catch (error) {
+      console.error('Failed to copy link:', error);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = videoUrl;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+      setShowShareMenu(false);
+    }
+  };
+
+  const handleSaveVideo = () => {
+    // TODO: Implement save to playlist functionality
+    alert('Save to playlist feature coming soon!');
+    setShowMoreMenu(false);
+  };
+
+  const handleReportVideo = () => {
+    // TODO: Implement report video functionality
+    alert('Report video feature coming soon!');
+    setShowMoreMenu(false);
+  };
+
+  // Close menus when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (shareMenuRef.current && !shareMenuRef.current.contains(event.target)) {
+        setShowShareMenu(false);
+      }
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) {
+        setShowMoreMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   return (
     <div className='flex flex-col'>
-      <div className='lg:text-3xl md:text-2xl sm:text-2xl font-semibold mb-3'>
+      {/* Video Title */}
+      <h1 className='text-xl font-semibold mb-4 text-gray-900'>
         {video.title}
-      </div>
+      </h1>
 
-      <div className="flex items-center gap-4 mb-4">
-      
-      <div className='w-10 h-10'>
-      <Avatar user={video.owner} type='medium'/>
+      {/* Channel Info and Action Buttons Row */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 pb-4 border-b border-gray-200">
+        {/* Channel Info Section */}
+        <div className="flex items-center gap-3 flex-1">
+          <div 
+            onClick={() => navigate(profileUrl)} 
+            className="cursor-pointer flex-shrink-0"
+          >
+            <Avatar user={video.owner} type='medium'/>
+          </div>
+          
+          <div className="flex flex-col min-w-0">
+            <h2 
+              onClick={() => navigate(profileUrl)} 
+              className="font-semibold text-sm cursor-pointer hover:text-gray-600 truncate"
+            >
+              {video.owner.fullname}
+            </h2>
+            <p className="text-xs text-gray-600">
+              {formatNumber(subscribersCount)} subscribers
+            </p>
+          </div>
 
-      </div>
-
-        <div className="flex flex-col ">
-          <h1 onClick={() => navigate(profileUrl)} className="lg:text-xl md:text-lg sm:text-sm cursor-pointer">{video.owner.fullname}</h1>
-          <h1 className="text-gray-700">{subscribersCount} subscribers</h1>
-        </div>
-        {
-          (() => {
+          {/* Subscribe Button */}
+          {(() => {
             const userId = user?.id || user?._id;
             const ownerId = video?.owner?.id || video?.owner?._id;
             if (!userId || !ownerId || userId === ownerId) return null;
             
             return (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 ml-2">
                 <button 
                   onClick={handleSubscription} 
-                  className={`px-3 py-2 md:px-4 md:py-3 rounded-full ${subscribed ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-orange-500 hover:bg-orange-600 text-white'}`}
+                  className={`px-4 py-2 rounded-full font-medium text-sm transition-colors ${
+                    subscribed 
+                      ? 'bg-gray-200 text-gray-900 hover:bg-gray-300' 
+                      : 'bg-red-600 text-white hover:bg-red-700'
+                  }`}
                 >
-                  {subscribed ? 'Unsubscribe' : 'Subscribe'}
+                  {subscribed ? 'Subscribed' : 'Subscribe'}
                 </button>
                 {subscribed && (
                   <button
                     onClick={handleToggleNotifications}
-                    className={`p-2 md:p-3 rounded-full transition-colors ${
+                    className={`p-2 rounded-full transition-colors ${
                       notificationsEnabled 
                         ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' 
                         : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
                     }`}
-                    title={notificationsEnabled ? 'Notifications enabled - Click to disable' : 'Notifications disabled - Click to enable'}
+                    title={notificationsEnabled ? 'Notifications enabled' : 'Notifications disabled'}
                   >
                     {notificationsEnabled ? (
-                      <MdNotifications className="text-xl md:text-2xl" />
+                      <MdNotifications className="text-xl" />
                     ) : (
-                      <MdNotificationsOff className="text-xl md:text-2xl" />
+                      <MdNotificationsOff className="text-xl" />
                     )}
                   </button>
                 )}
               </div>
             );
-          })()
-        }
-       
-        <div className="flex items-center gap-4 ml-auto">
-          <div className="flex items-center text-lg  bg-gray-100 rounded-full px-3 py-2 gap-4">
-            <button onClick={handleLike} className="transition-all duration-100 ease-linear hover:scale-125 flex items-center">
-              {isLiked ? <BiSolidLike className=" text-3xl" /> : <BiLike className="" />}
-              <span className="ml-2">{likeCount}</span>
+          })()}
+        </div>
+
+        {/* Action Buttons Row */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Like/Dislike */}
+          <div className="flex items-center bg-gray-100 rounded-full overflow-hidden">
+            <button 
+              onClick={handleLike} 
+              className="flex items-center gap-2 px-4 py-2 hover:bg-gray-200 transition-colors border-r border-gray-300"
+            >
+              {isLiked ? (
+                <BiSolidLike className="text-xl text-blue-600" />
+              ) : (
+                <BiLike className="text-xl" />
+              )}
+              <span className="text-sm font-medium">{formatNumber(likeCount)}</span>
             </button>
-            <span className='text-gray-400'>|</span>
-            <button onClick={handleDislike} className="transition-all duration-100 ease-linear hover:scale-125 flex items-center">
-              {isDisliked ? <BiSolidDislike /> : <BiDislike />}
-              <span className="ml-2">{dislikeCount}</span>
+            <button 
+              onClick={handleDislike} 
+              className="px-4 py-2 hover:bg-gray-200 transition-colors"
+            >
+              {isDisliked ? (
+                <BiSolidDislike className="text-xl text-blue-600" />
+              ) : (
+                <BiDislike className="text-xl" />
+              )}
             </button>
+          </div>
+
+          {/* Share Button with Menu */}
+          <div className="relative" ref={shareMenuRef}>
+            <button 
+              onClick={() => {
+                setShowShareMenu(!showShareMenu);
+                setShowMoreMenu(false);
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
+            >
+              <HiShare className="text-xl" />
+              <span className="text-sm font-medium">Share</span>
+            </button>
+
+            {showShareMenu && (
+              <div className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-lg p-4 z-50 min-w-[200px]">
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={handleCopyLink}
+                    className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 rounded transition-colors text-left"
+                  >
+                    <FiCopy />
+                    <span>Copy Link</span>
+                  </button>
+                  
+                  <div className="border-t my-2"></div>
+                  
+                  <div className="flex gap-3 justify-center">
+                    <FacebookShareButton
+                      url={videoUrl}
+                      quote={shareTitle}
+                      className="hover:opacity-80 transition-opacity"
+                    >
+                      <FacebookIcon size={32} round />
+                    </FacebookShareButton>
+                    
+                    <TwitterShareButton
+                      url={videoUrl}
+                      title={shareTitle}
+                      className="hover:opacity-80 transition-opacity"
+                    >
+                      <TwitterIcon size={32} round />
+                    </TwitterShareButton>
+                    
+                    <WhatsappShareButton
+                      url={videoUrl}
+                      title={shareTitle}
+                      className="hover:opacity-80 transition-opacity"
+                    >
+                      <WhatsappIcon size={32} round />
+                    </WhatsappShareButton>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Download Button */}
+          <button 
+            onClick={async () => {
+              if (!video.videoFile && !video.url) {
+                alert('Video URL not available for download');
+                return;
+              }
+              try {
+                const videoUrl = video.videoFile || video.url;
+                const response = await fetch(videoUrl);
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${(video.title || 'video').replace(/[^a-z0-9]/gi, '_')}.mp4`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+              } catch (error) {
+                console.error('Download error:', error);
+                const videoUrl = video.videoFile || video.url;
+                window.open(videoUrl, '_blank');
+              }
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
+          >
+            <HiDownload className="text-xl" />
+            <span className="text-sm font-medium">Download</span>
+          </button>
+
+          {/* More Menu */}
+          <div className="relative" ref={moreMenuRef}>
+            <button 
+              onClick={() => {
+                setShowMoreMenu(!showMoreMenu);
+                setShowShareMenu(false);
+              }}
+              className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+              </svg>
+            </button>
+
+            {showMoreMenu && (
+              <div className="absolute top-full right-0 mt-2 bg-white rounded-lg shadow-lg p-2 z-50 min-w-[180px]">
+                <button
+                  onClick={handleSaveVideo}
+                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-100 rounded transition-colors text-left text-sm"
+                >
+                  <HiOutlineCheck className="text-lg" />
+                  <span>Save</span>
+                </button>
+                <button
+                  onClick={handleReportVideo}
+                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-100 rounded transition-colors text-left text-sm text-red-600"
+                >
+                  <FiFlag className="text-lg" />
+                  <span>Report</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* views and description */}
-      <div className=' bg-gray-200 rounded-lg p-4 text-sm'>
-        <div>
-          {video.views} views<LuDot className='inline px-0 mx-0' />{moment(video.createdAt).fromNow()}
+      {/* Video Stats and Description */}
+      <div className='bg-gray-50 rounded-lg p-4'>
+        {/* Views and Date */}
+        <div className="flex items-center gap-2 mb-3 text-sm text-gray-600">
+          <span className="font-medium">{formatNumber(video.views)} views</span>
+          <LuDot className="text-gray-400" />
+          <span>{moment(video.createdAt).fromNow()}</span>
         </div>
-        {/* description */}
-        <div className='overflow-hidden'>
-          {video.description.length > descriptionLimit ? (
+
+        {/* Description */}
+        <div className='text-sm text-gray-800 whitespace-pre-wrap'>
+          {video.description && video.description.length > descriptionLimit ? (
             <>
-              {isDescriptionExpanded ? video.description : `${video.description.slice(0, descriptionLimit)}...`}
-              <button onClick={toggleDescription} className="font-bold ml-2">
+              {isDescriptionExpanded ? (
+                <div>{video.description}</div>
+              ) : (
+                <div>{video.description.slice(0, descriptionLimit)}</div>
+              )}
+              <button 
+                onClick={toggleDescription} 
+                className="font-semibold text-gray-600 hover:text-gray-900 mt-1"
+              >
                 {isDescriptionExpanded ? 'Show less' : 'Show more'}
               </button>
             </>
           ) : (
-            video.description
+            <div>{video.description || 'No description available.'}</div>
           )}
         </div>
       </div>
+
+      {/* Comments Button - YouTube style (Toggle) */}
+      <div className="mt-6 border-t border-gray-200 pt-4">
+        <button
+          onClick={() => {
+            if (onToggleComments) {
+              onToggleComments();
+            }
+          }}
+          className="text-left w-full py-3 hover:bg-gray-50 rounded-lg px-2 transition-colors cursor-pointer"
+          type="button"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-semibold text-gray-900">
+              {formatNumber(displayParentCount)} Comments
+            </span>
+            {displayCommentsCount !== displayParentCount && displayCommentsCount > 0 && (
+              <span className="text-sm text-gray-600">
+                ({displayCommentsCount} including replies)
+              </span>
+            )}
+            {/* Toggle indicator */}
+            <span className="ml-auto text-sm text-gray-500">
+              {showComments ? '▼' : '▶'}
+            </span>
+          </div>
+        </button>
+      </div>
+      
+      {copySuccess && <SuccessDialog message="Link copied to clipboard!" />}
     </div>
   );
 };

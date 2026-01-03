@@ -12,7 +12,7 @@ import { FaRegUser } from 'react-icons/fa';
 // either apply pagination or load more comments on button click
 // or infinite scroll to load more comments
 
-function Comments() {
+function Comments({ onCommentsChange }) {
   const [comments, setComments] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -20,6 +20,7 @@ function Comments() {
   const user = useSelector(state => state.user.user);
 
   useEffect(() => {
+    // Only fetch comments when component is mounted (i.e., when showComments is true)
     const fetchComments = async () => {
       if (!videoId) {
         setLoading(false);
@@ -76,7 +77,16 @@ function Comments() {
         console.log('Total comments found:', commentsData.length);
         console.log('Valid comments count:', validComments.length);
         console.log('Parsed comments:', validComments);
-        setComments(Array.isArray(validComments) ? validComments : []);
+        const finalComments = Array.isArray(validComments) ? validComments : [];
+        setComments(finalComments);
+        
+        // Notify parent component of comment count changes
+        if (onCommentsChange) {
+          const parentCount = finalComments.length;
+          const totalCount = finalComments.reduce((sum, comment) => sum + 1 + (comment.replies?.length || 0), 0);
+          onCommentsChange(totalCount, parentCount);
+        }
+        
         setLoading(false);
       } catch (error) {
         setLoading(false);
@@ -120,18 +130,34 @@ function Comments() {
       
       // Refresh comments from server to ensure we have the latest data
       // This ensures comments persist after page refresh
-      setComments([newComment, ...comments]);
+      const updatedComments = [newComment, ...comments];
+      setComments(updatedComments);
       e.target.reset();
       setError(null);
+      
+      // Update comment count immediately
+      if (onCommentsChange) {
+        const parentCount = updatedComments.length;
+        const totalCount = updatedComments.reduce((sum, comment) => sum + 1 + (comment.replies?.length || 0), 0);
+        onCommentsChange(totalCount, parentCount);
+      }
       
       // Optionally refetch comments to ensure sync with server
       // This helps if there are any issues with the new comment structure
       setTimeout(async () => {
         try {
           const refreshResponse = await axiosInstance.get(`/comments/${videoId}`);
-          const refreshData = refreshResponse.data?.data?.comments || refreshResponse.data?.data || [];
+          const refreshData = refreshResponse.data?.data?.data?.comments || refreshResponse.data?.data?.comments || refreshResponse.data?.data || [];
           if (Array.isArray(refreshData)) {
-            setComments(refreshData);
+            const validComments = refreshData.filter(comment => comment.id || comment._id);
+            setComments(validComments);
+            
+            // Update count after refresh
+            if (onCommentsChange) {
+              const parentCount = validComments.length;
+              const totalCount = validComments.reduce((sum, comment) => sum + 1 + (comment.replies?.length || 0), 0);
+              onCommentsChange(totalCount, parentCount);
+            }
           }
         } catch (refreshError) {
           console.error('Error refreshing comments:', refreshError);
@@ -164,10 +190,14 @@ function Comments() {
 
   // Ensure comments is always an array
   const safeComments = Array.isArray(comments) ? comments : [];
+  
+  // Calculate total comments including replies
+  const totalComments = safeComments.reduce((total, comment) => {
+    return total + 1 + (comment.replies?.length || 0);
+  }, 0);
 
   return (
-    <div>
-      <h2 className="text-lg font-bold mb-4">{safeComments.length} Comments</h2>
+    <div className="border-t border-gray-200 pt-4">
       <form className='flex items-center space-x-4 mb-6' onSubmit={handleAddComment}>
         {user?.avatar ? (
           <img src={user.avatar} alt={user.username} className='w-10 h-10 rounded-full' />
@@ -206,7 +236,28 @@ function Comments() {
               <CommentLayout
                 key={`comment-${commentId}-${index}`}
                 comment={comment}
-                setComments={setComments}
+                setComments={(updater) => {
+                  if (typeof updater === 'function') {
+                    setComments(prevComments => {
+                      const updated = updater(prevComments);
+                      // Notify parent of count changes
+                      if (onCommentsChange) {
+                        const parentCount = updated.length;
+                        const totalCount = updated.reduce((sum, comment) => sum + 1 + (comment.replies?.length || 0), 0);
+                        onCommentsChange(totalCount, parentCount);
+                      }
+                      return updated;
+                    });
+                  } else {
+                    setComments(updater);
+                    // Notify parent of count changes
+                    if (onCommentsChange) {
+                      const parentCount = updater.length;
+                      const totalCount = updater.reduce((sum, comment) => sum + 1 + (comment.replies?.length || 0), 0);
+                      onCommentsChange(totalCount, parentCount);
+                    }
+                  }
+                }}
                 videoId={videoId}
               />
             );

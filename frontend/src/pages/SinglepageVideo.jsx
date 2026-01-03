@@ -16,6 +16,9 @@ const SinglepageVideo = () => {
   const [quality, setQuality] = useState('auto');
   const [subtitle, setSubtitle] = useState('none');
   const [playerInstance, setPlayerInstance] = useState(null);
+  const [showComments, setShowComments] = useState(false);
+  const [commentsCount, setCommentsCount] = useState(0);
+  const [parentCommentsCount, setParentCommentsCount] = useState(0);
 
   const { id } = useParams();
 
@@ -69,18 +72,59 @@ const SinglepageVideo = () => {
   }
 
   return (
-    <div className="flex flex-col md:flex-row">
-      {/* Video Player */}
-      <div className="md:w-full">
-        {video && <VideoPlayer video={video} quality={quality} subtitle={subtitle} onPlayerReady={setPlayerInstance} />}
-        {video && <VideoActions video={video} playerInstance={playerInstance} onQualityChange={setQuality} onSubtitleChange={setSubtitle} currentQuality={quality} currentSubtitle={subtitle} />}
-        {video && <VideoDetails video={video} />}
-        <Comments />
-      </div>
+    <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Main Video Content - Left Side (Wider) */}
+        <div className="flex-1 min-w-0">
+          {/* Video Player */}
+          {video && (
+            <div className="mb-4">
+              <VideoPlayer video={video} quality={quality} subtitle={subtitle} onPlayerReady={setPlayerInstance} />
+            </div>
+          )}
+          
+          {/* Video Actions (Speed, Quality, etc.) */}
+          {video && (
+            <div className="mb-4">
+              <VideoActions 
+                video={video} 
+                playerInstance={playerInstance} 
+                onQualityChange={setQuality} 
+                onSubtitleChange={setSubtitle} 
+                currentQuality={quality} 
+                currentSubtitle={subtitle} 
+              />
+            </div>
+          )}
+          
+          {/* Video Details */}
+          {video && (
+            <div className="mb-6">
+              <VideoDetails 
+                video={video} 
+                showComments={showComments}
+                onToggleComments={() => setShowComments(!showComments)}
+                commentsCount={commentsCount}
+                parentCommentsCount={parentCommentsCount}
+              />
+            </div>
+          )}
+          
+          {/* Comments Section - Only show when button is clicked */}
+          {showComments && (
+            <div className="mt-6">
+              <Comments onCommentsChange={(totalCount, parentCount) => {
+                setCommentsCount(totalCount);
+                setParentCommentsCount(parentCount);
+              }} />
+            </div>
+          )}
+        </div>
 
-      {/* Related Videos */}
-      <div className="md:w-1/3">
-        {relatedVideos.length > 0 && <RelatedVideos videos={relatedVideos} />}
+        {/* Related Videos Sidebar - Right Side (Narrower) */}
+        <div className="lg:w-96 flex-shrink-0">
+          {relatedVideos.length > 0 && <RelatedVideos videos={relatedVideos} />}
+        </div>
       </div>
     </div>
   );
