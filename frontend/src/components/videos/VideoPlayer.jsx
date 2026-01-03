@@ -14,7 +14,7 @@ const extractPublicId = (url) => {
   }
 };
 
-const VideoPlayer = ({ video, quality = 'auto', subtitle = 'none', ...props }) => {
+const VideoPlayer = ({ video, quality = 'auto', subtitle = 'none', onPlayerReady, ...props }) => {
   const [playerInstance, setPlayerInstance] = useState(null);
 
   if (!video) {
@@ -105,6 +105,23 @@ const VideoPlayer = ({ video, quality = 'auto', subtitle = 'none', ...props }) =
     const player = cloudinaryRef.current.videoPlayer(playerRef.current, playerConfig);
     player.source(publicId);
     setPlayerInstance(player);
+    
+    // Expose player instance to parent component
+    // Cloudinary player is based on Video.js, use ready() callback
+    if (player.ready && typeof player.ready === 'function') {
+      player.ready(() => {
+        if (onPlayerReady && typeof onPlayerReady === 'function') {
+          onPlayerReady(player);
+        }
+      });
+    } else {
+      // Fallback: call immediately if ready() is not available
+      setTimeout(() => {
+        if (onPlayerReady && typeof onPlayerReady === 'function') {
+          onPlayerReady(player);
+        }
+      }, 100);
+    }
 
     return () => {
       if (player && typeof player.destroy === 'function') {

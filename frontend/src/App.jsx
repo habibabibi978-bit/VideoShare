@@ -14,6 +14,8 @@ import Subscriptions from './pages/Subscriptions';
 import WatchHistory from './pages/WatchHistory';
 import LikedVideos from './pages/LikedVideos';
 import EmailVerify from './components/EmailVerify'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 
 // ProtectedRoute component
 const ProtectedRoute = ({ children }) => {
@@ -45,6 +47,8 @@ useEffect(() => {
     <Router>
       <Routes>
         <Route path="/login" element={<SignIn />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:userId/:token" element={<ResetPassword />} />
 
         <Route path="user/verify/:userId/:token" element={<EmailVerify />} />
         

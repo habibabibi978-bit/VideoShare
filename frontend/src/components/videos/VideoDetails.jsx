@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { BiLike, BiSolidLike, BiDislike, BiSolidDislike } from "react-icons/bi";
+import { MdNotifications, MdNotificationsOff } from "react-icons/md";
 import { useSelector, useDispatch } from 'react-redux';
 import { fetchLikedVideos, fetchDislikedVideos } from '../../features/UserSlice';
 import axiosInstance from '../../utils/axiosInstance';
@@ -28,6 +29,7 @@ const navigate = useNavigate();
   const descriptionLimit = 1000; // Set a limit for the number of characters to show initially
 
   const [subscribed, setSubscribed] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
 
   const handleLike = async () => {
@@ -210,6 +212,20 @@ const navigate = useNavigate();
         
         // Use subscribers count from video owner or calculate from array
         setSubscribersCount(video.owner?.subscribersCount || subscribersArray.length || 0);
+
+        // Fetch subscription status including notification preferences
+        if (user) {
+          try {
+            const statusResponse = await axiosInstance.get(`/subscription/status/${channelId}`);
+            const status = statusResponse.data?.data || statusResponse.data;
+            if (status) {
+              setSubscribed(status.subscribed || false);
+              setNotificationsEnabled(status.notificationsEnabled || false);
+            }
+          } catch (error) {
+            console.error("Error fetching subscription status:", error);
+          }
+        }
       } catch (error) {
         console.error("Error fetching subscribers:", error);
         // Fallback to owner's subscribersCount if available
@@ -246,15 +262,38 @@ const navigate = useNavigate();
     if (!userId || !channelId) return;
 
     try {
-      await axiosInstance.post(`subscription/toggle/${channelId}`);
-      setSubscribed(!subscribed);
-      if (subscribed) {
-        setSubscribersCount(subscribersCount - 1);
-      }else{
+      const response = await axiosInstance.post(`subscription/toggle/${channelId}`);
+      const data = response.data?.data || response.data;
+      setSubscribed(data.subscribed || !subscribed);
+      if (data.subscribed) {
         setSubscribersCount(subscribersCount + 1);
+        // When subscribing, notifications are enabled by default
+        setNotificationsEnabled(true);
+      } else {
+        setSubscribersCount(subscribersCount - 1);
+        setNotificationsEnabled(false);
       }
     } catch (error) {
       console.error('Error:', error.message || 'Something went wrong');
+    }
+  }
+
+  const handleToggleNotifications = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!user || !subscribed) return;
+    if (!video || !video.owner) return;
+
+    const channelId = video.owner.id || video.owner._id;
+    if (!channelId) return;
+
+    try {
+      const response = await axiosInstance.post(`subscription/toggle-notifications/${channelId}`);
+      const data = response.data?.data || response.data;
+      setNotificationsEnabled(data.notificationsEnabled || false);
+    } catch (error) {
+      console.error('Error toggling notifications:', error.response?.data || error.message || 'Something went wrong');
+      alert(error.response?.data?.message || 'Failed to toggle notifications. Please try again.');
     }
   }
   const profileUrl = `/c/${video.owner.username}`;
@@ -282,9 +321,31 @@ const navigate = useNavigate();
             if (!userId || !ownerId || userId === ownerId) return null;
             
             return (
-              <button onClick={handleSubscription} className={` px-3 py-2 md:px-4 md:py-3 rounded-full ${subscribed ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-orange-500 hover:bg-orange-600 text-white'}`}>
-                {subscribed ? 'Unsubscribe' : 'Subscribe'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleSubscription} 
+                  className={`px-3 py-2 md:px-4 md:py-3 rounded-full ${subscribed ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-orange-500 hover:bg-orange-600 text-white'}`}
+                >
+                  {subscribed ? 'Unsubscribe' : 'Subscribe'}
+                </button>
+                {subscribed && (
+                  <button
+                    onClick={handleToggleNotifications}
+                    className={`p-2 md:p-3 rounded-full transition-colors ${
+                      notificationsEnabled 
+                        ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' 
+                        : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                    }`}
+                    title={notificationsEnabled ? 'Notifications enabled - Click to disable' : 'Notifications disabled - Click to enable'}
+                  >
+                    {notificationsEnabled ? (
+                      <MdNotifications className="text-xl md:text-2xl" />
+                    ) : (
+                      <MdNotificationsOff className="text-xl md:text-2xl" />
+                    )}
+                  </button>
+                )}
+              </div>
             );
           })()
         }

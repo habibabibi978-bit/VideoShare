@@ -9,6 +9,8 @@ import { Video } from '../entities/video.entity';
 import { CreateVideoDto } from './dto/create-video.dto';
 import { Like, LikeType } from '../entities/like.entity';
 import { Subscription } from '../entities/subscription.entity';
+import { NotificationsService } from '../notifications/notifications.service';
+import { User } from '../entities/user.entity';
 
 @Injectable()
 export class VideosService {
@@ -19,6 +21,9 @@ export class VideosService {
     private likeRepository: Repository<Like>,
     @InjectRepository(Subscription)
     private subscriptionRepository: Repository<Subscription>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+    private notificationsService: NotificationsService,
   ) {}
 
   async create(createVideoDto: CreateVideoDto, ownerId: string, videoFile: string, thumbnail: string) {
@@ -28,7 +33,39 @@ export class VideosService {
       videoFile,
       thumbnail,
     });
-    return this.videoRepository.save(video);
+    const savedVideo = await this.videoRepository.save(video);
+
+    // Send notifications to subscribers with notifications enabled
+    if (savedVideo.isPublished) {
+      try {
+        const subscriptions = await this.subscriptionRepository.find({
+          where: { channelId: ownerId, notificationsEnabled: true },
+          relations: ['subscriber'],
+        });
+
+        // Get owner info for notification message
+        const owner = await this.userRepository.findOne({ where: { id: ownerId } });
+        const ownerName = owner?.fullname || owner?.username || 'A channel';
+        const videoLink = `/videos/${savedVideo.id}`;
+
+        // Create notifications for each subscriber
+        await Promise.all(
+          subscriptions.map((subscription) =>
+            this.notificationsService.create(
+              subscription.subscriberId,
+              `${ownerName} uploaded a new video: ${savedVideo.title}`,
+              'video_upload',
+              videoLink,
+            ),
+          ),
+        );
+      } catch (error) {
+        // Log error but don't fail video creation if notifications fail
+        console.error('Error sending notifications:', error);
+      }
+    }
+
+    return savedVideo;
   }
 
   async findAll(page: number = 1, limit: number = 20) {

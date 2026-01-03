@@ -49,6 +49,12 @@ export class User {
   @Column({ nullable: true, type: 'timestamp' })
   emailVerificationExpires: Date | null;
 
+  @Column({ nullable: true, type: 'varchar' })
+  passwordResetToken: string | null;
+
+  @Column({ nullable: true, type: 'timestamp' })
+  passwordResetExpires: Date | null;
+
   @Column({ nullable: true, unique: true })
   googleId: string;
 

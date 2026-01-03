@@ -23,8 +23,24 @@ export const login = createAsyncThunk(
         return rejectWithValue({ message: 'Network error. Please check your connection and try again.' });
       }
       // Server responded with error status
-      const errorMessage = error.response.data?.message || error.response.data?.error || 'Login failed. Please check your credentials.';
-      return rejectWithValue({ message: errorMessage, data: error.response.data });
+      // NestJS returns errors in format: { statusCode, message, error }
+      const errorData = error.response.data;
+      let errorMessage = 'Login failed. Please check your credentials.';
+      
+      if (errorData) {
+        // Try different possible error message locations
+        if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        } else if (errorData.message) {
+          errorMessage = Array.isArray(errorData.message) 
+            ? errorData.message[0] 
+            : errorData.message;
+        } else if (errorData.error) {
+          errorMessage = errorData.error;
+        }
+      }
+      
+      return rejectWithValue({ message: errorMessage, data: errorData });
     }
   }
 );
@@ -83,7 +99,8 @@ export const signUp = createAsyncThunk(
   async (userDetails, { rejectWithValue }) => {
     try {
       const response = await axiosInstance.post('/users/register', userDetails);
-      return response.data.data;
+      // Backend returns { message, user } - no tokens until email is verified
+      return response.data.data || response.data;
     } catch (error) {
       // Better error handling
       if (!error.response) {
@@ -231,6 +248,7 @@ const userSlice = createSlice({
         state.success = true;
         state.loading = false;
         state.error = null;
+        // Don't set user or tokens - user must verify email first
       })
       .addCase(signUp.rejected, (state, action) => {
         state.success = false;

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { HiShare, HiDownload, HiOutlineCheck } from 'react-icons/hi';
 import { FiCopy } from 'react-icons/fi';
+import { MdFastForward, MdFastRewind } from 'react-icons/md';
 import { 
   FacebookShareButton, 
   TwitterShareButton, 
@@ -11,14 +12,17 @@ import {
 } from 'react-share';
 import SuccessDialog from '../SuccessDialog';
 
-const VideoActions = ({ video, onQualityChange, onSubtitleChange, currentQuality = 'auto', currentSubtitle = 'none' }) => {
+const VideoActions = ({ video, playerInstance, onQualityChange, onSubtitleChange, currentQuality = 'auto', currentSubtitle = 'none' }) => {
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
+  const [showSpeedMenu, setShowSpeedMenu] = useState(false);
+  const [currentSpeed, setCurrentSpeed] = useState(1);
   const [copySuccess, setCopySuccess] = useState(false);
   const shareMenuRef = useRef(null);
   const qualityMenuRef = useRef(null);
   const subtitleMenuRef = useRef(null);
+  const speedMenuRef = useRef(null);
 
   // Close menus when clicking outside
   useEffect(() => {
@@ -32,6 +36,9 @@ const VideoActions = ({ video, onQualityChange, onSubtitleChange, currentQuality
       if (subtitleMenuRef.current && !subtitleMenuRef.current.contains(event.target)) {
         setShowSubtitleMenu(false);
       }
+      if (speedMenuRef.current && !speedMenuRef.current.contains(event.target)) {
+        setShowSpeedMenu(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -39,6 +46,84 @@ const VideoActions = ({ video, onQualityChange, onSubtitleChange, currentQuality
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  // Get the underlying video element from Cloudinary player
+  const getVideoElement = () => {
+    if (!playerInstance) return null;
+    // Cloudinary player is based on Video.js, try to access the video element
+    try {
+      // Video.js player has el() method that returns the container
+      if (playerInstance.el && typeof playerInstance.el === 'function') {
+        const container = playerInstance.el();
+        // Find the actual video element inside the container
+        const videoElement = container?.querySelector('video');
+        if (videoElement) return videoElement;
+        // If no video found, the container itself might be the video element
+        if (container.tagName === 'VIDEO') return container;
+      }
+      // Try tech() method (Video.js way)
+      if (playerInstance.tech && typeof playerInstance.tech === 'function') {
+        const tech = playerInstance.tech();
+        if (tech && tech.el) {
+          return tech.el();
+        }
+      }
+      // Fallback: try to find video element in the DOM by class
+      const videoElement = document.querySelector('.cld-video-player video, .video-js video, video.cld-video-player');
+      return videoElement;
+    } catch (error) {
+      console.error('Error getting video element:', error);
+      return null;
+    }
+  };
+
+  // Sync current speed when player is ready
+  useEffect(() => {
+    if (playerInstance) {
+      const videoElement = getVideoElement();
+      if (videoElement) {
+        setCurrentSpeed(videoElement.playbackRate || 1);
+      }
+    }
+  }, [playerInstance]);
+
+  const handleSpeedChange = (speed) => {
+    const videoElement = getVideoElement();
+    if (videoElement) {
+      try {
+        videoElement.playbackRate = speed;
+        setCurrentSpeed(speed);
+        setShowSpeedMenu(false);
+      } catch (error) {
+        console.error('Error changing playback speed:', error);
+      }
+    }
+  };
+
+  const handleSeek = (seconds) => {
+    const videoElement = getVideoElement();
+    if (videoElement) {
+      try {
+        const newTime = Math.max(0, Math.min(videoElement.currentTime + seconds, videoElement.duration));
+        videoElement.currentTime = newTime;
+      } catch (error) {
+        console.error('Error seeking video:', error);
+      }
+    }
+  };
+
+  const playbackSpeeds = [
+    { label: '0.25x', value: 0.25 },
+    { label: '0.5x', value: 0.5 },
+    { label: '0.75x', value: 0.75 },
+    { label: '1x', value: 1 },
+    { label: '1.25x', value: 1.25 },
+    { label: '1.5x', value: 1.5 },
+    { label: '1.75x', value: 1.75 },
+    { label: '2x', value: 2 },
+    { label: '2.5x', value: 2.5 },
+    { label: '3x', value: 3 },
+  ];
 
   if (!video) return null;
 
@@ -116,7 +201,60 @@ const VideoActions = ({ video, onQualityChange, onSubtitleChange, currentQuality
   ];
 
   return (
-    <div className="flex items-center gap-2 mb-4">
+    <div className="flex items-center gap-2 mb-4 flex-wrap">
+      {/* Forward 10 seconds Button */}
+      <button
+        onClick={() => handleSeek(10)}
+        className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+        title="Forward 10 seconds"
+      >
+        <MdFastForward className="text-xl" />
+        <span className="hidden md:inline">10s</span>
+      </button>
+
+      {/* Backward 10 seconds Button */}
+      <button
+        onClick={() => handleSeek(-10)}
+        className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+        title="Backward 10 seconds"
+      >
+        <MdFastRewind className="text-xl" />
+        <span className="hidden md:inline">10s</span>
+      </button>
+
+      {/* Playback Speed Selector */}
+      <div className="relative" ref={speedMenuRef}>
+        <button
+          onClick={() => {
+            setShowSpeedMenu(!showSpeedMenu);
+            setShowQualityMenu(false);
+            setShowSubtitleMenu(false);
+            setShowShareMenu(false);
+          }}
+          className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+        >
+          <span className="hidden md:inline">Speed:</span>
+          <span>{currentSpeed}x</span>
+        </button>
+
+        {showSpeedMenu && (
+          <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-lg p-2 z-50 min-w-[120px] max-h-[300px] overflow-y-auto">
+            {playbackSpeeds.map((speed) => (
+              <button
+                key={speed.value}
+                onClick={() => handleSpeedChange(speed.value)}
+                className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-100 rounded transition-colors text-left"
+              >
+                <span>{speed.label}</span>
+                {currentSpeed === speed.value && (
+                  <HiOutlineCheck className="text-green-500" />
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Share Button */}
       <div className="relative" ref={shareMenuRef}>
         <button

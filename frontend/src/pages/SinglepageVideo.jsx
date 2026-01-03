@@ -15,6 +15,7 @@ const SinglepageVideo = () => {
   const [relatedVideos, setRelatedVideos] = useState([]);
   const [quality, setQuality] = useState('auto');
   const [subtitle, setSubtitle] = useState('none');
+  const [playerInstance, setPlayerInstance] = useState(null);
 
   const { id } = useParams();
 
@@ -71,8 +72,8 @@ const SinglepageVideo = () => {
     <div className="flex flex-col md:flex-row">
       {/* Video Player */}
       <div className="md:w-full">
-        {video && <VideoPlayer video={video} quality={quality} subtitle={subtitle} />}
-        {video && <VideoActions video={video} onQualityChange={setQuality} onSubtitleChange={setSubtitle} currentQuality={quality} currentSubtitle={subtitle} />}
+        {video && <VideoPlayer video={video} quality={quality} subtitle={subtitle} onPlayerReady={setPlayerInstance} />}
+        {video && <VideoActions video={video} playerInstance={playerInstance} onQualityChange={setQuality} onSubtitleChange={setSubtitle} currentQuality={quality} currentSubtitle={subtitle} />}
         {video && <VideoDetails video={video} />}
         <Comments />
       </div>

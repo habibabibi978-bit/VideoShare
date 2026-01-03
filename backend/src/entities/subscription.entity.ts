@@ -30,6 +30,9 @@ export class Subscription {
   @JoinColumn({ name: 'channelId' })
   channel: User;
 
+  @Column({ type: 'boolean', default: true })
+  notificationsEnabled: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

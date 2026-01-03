@@ -4,6 +4,7 @@ import axiosInstance from '../utils/axiosInstance';
 import VideoCard from '../components/videos/VideoCard';
 import { useDispatch, useSelector } from 'react-redux';
 import { FaRegUser } from 'react-icons/fa';
+import { MdNotifications, MdNotificationsOff } from "react-icons/md";
 import Spinner from '../components/Spinner';
 import { fetchUserVideos } from '../features/UserSlice';
 import Avatar from '../components/Avatar';
@@ -17,6 +18,7 @@ const UserProfile = () => {
     const [error, setError] = useState(null);
     const [isSubscribed, setSubscribed] = useState(false);
     const [subscribersCount, setSubscribersCount] = useState(0);
+    const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
     const dispatch = useDispatch();
     const user = useSelector(state => state.user.user);
@@ -31,6 +33,25 @@ const UserProfile = () => {
                 setProfile(response.data.data);
                 setSubscribed(response.data.data.isSubscribed);
                 setSubscribersCount(response.data.data.subscribersCount);
+                
+                // Fetch subscription status including notification preferences
+                if (user && (response.data.data._id || response.data.data.id)) {
+                    const profileId = response.data.data._id || response.data.data.id;
+                    try {
+                        const statusResponse = await axiosInstance.get(`/subscription/status/${profileId}`);
+                        const status = statusResponse.data?.data || statusResponse.data;
+                        if (status) {
+                            setSubscribed(status.subscribed || false);
+                            setNotificationsEnabled(status.notificationsEnabled || false);
+                        }
+                    } catch (error) {
+                        // If user is not logged in or subscription doesn't exist, that's okay
+                        console.error("Error fetching subscription status:", error);
+                        setSubscribed(false);
+                        setNotificationsEnabled(false);
+                    }
+                }
+                
                 setLoading(false);
             } catch (err) {
                 setError(err.response?.data?.message || 'An error occurred');
@@ -55,24 +76,54 @@ const UserProfile = () => {
 
         fetchUserProfile();
         fetchUserPlaylists();
-    }, [username, dispatch]);
+    }, [username, dispatch, user]);
 
     const handleSubscription = async () => {
-        if (!user?._id) return;
+        if (!user?._id && !user?.id) {
+            alert('Please log in to subscribe to channels.');
+            return;
+        }
+        
+        const profileId = profile?._id || profile?.id;
+        if (!profileId) {
+            alert('Profile information is not available. Please refresh the page.');
+            return;
+        }
 
         try {
+            const response = await axiosInstance.post(`/subscription/toggle/${profileId}`);
+            const data = response.data?.data || response.data;
+            setSubscribed(data.subscribed || false);
+            setNotificationsEnabled(data.notificationsEnabled || false);
             
-            await axiosInstance.post(`subscription/toggle/${profile._id}`);
-            setSubscribed(!isSubscribed);
-            if (isSubscribed) {
-                setSubscribersCount(subscribersCount - 1);
+            // Update subscribers count
+            if (data.subscribed) {
+                setSubscribersCount(prev => prev + 1);
             } else {
-                setSubscribersCount(subscribersCount + 1);
+                setSubscribersCount(prev => Math.max(0, prev - 1));
             }
-            
         } catch (error) {
-           
-            console.error('Error:', error.message || 'Something went wrong');
+            console.error('Subscription Error:', error.response?.data || error.message || 'Something went wrong');
+            const errorMsg = error.response?.data?.message || error.message || 'Failed to subscribe. Please try again.';
+            alert(errorMsg);
+        }
+    };
+
+    const handleToggleNotifications = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!user || !isSubscribed) return;
+        
+        const profileId = profile?._id || profile?.id;
+        if (!profileId) return;
+
+        try {
+            const response = await axiosInstance.post(`/subscription/toggle-notifications/${profileId}`);
+            const data = response.data?.data || response.data;
+            setNotificationsEnabled(data.notificationsEnabled || false);
+        } catch (error) {
+            console.error('Error toggling notifications:', error.response?.data || error.message || 'Something went wrong');
+            alert(error.response?.data?.message || 'Failed to toggle notifications. Please try again.');
         }
     };
 
@@ -118,10 +169,30 @@ const UserProfile = () => {
                     </div>
                 </div>
                 {user?.username === username ? null : (
-                    <div className="mt-4">
-                        <button onClick={handleSubscription} className={`px-4 py-2 rounded-full ${isSubscribed ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-orange-500 hover:bg-orange-600 text-white'}`}>
+                    <div className="mt-4 flex items-center justify-center gap-2">
+                        <button 
+                            onClick={handleSubscription} 
+                            className={`px-4 py-2 rounded-full ${isSubscribed ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-orange-500 hover:bg-orange-600 text-white'}`}
+                        >
                             {isSubscribed ? 'Unsubscribe' : 'Subscribe'}
                         </button>
+                        {isSubscribed && (
+                            <button
+                                onClick={handleToggleNotifications}
+                                className={`p-2 rounded-full transition-colors ${
+                                    notificationsEnabled 
+                                        ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' 
+                                        : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                                }`}
+                                title={notificationsEnabled ? 'Notifications enabled - Click to disable' : 'Notifications disabled - Click to enable'}
+                            >
+                                {notificationsEnabled ? (
+                                    <MdNotifications className="text-2xl" />
+                                ) : (
+                                    <MdNotificationsOff className="text-2xl" />
+                                )}
+                            </button>
+                        )}
                     </div>
                 )}
             </div>

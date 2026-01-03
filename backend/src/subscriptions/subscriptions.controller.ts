@@ -36,6 +36,22 @@ export class SubscriptionsController {
   async getSubscribers(@Param('channelId') channelId: string) {
     return { data: await this.subscriptionsService.getSubscribers(channelId) };
   }
+
+  @Post('toggle-notifications/:channelId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Toggle notification preferences for subscription' })
+  async toggleNotifications(@Param('channelId') channelId: string, @Req() req: any) {
+    return this.subscriptionsService.toggleNotifications(channelId, req.user.userId);
+  }
+
+  @Get('status/:channelId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get subscription status including notification preferences' })
+  async getSubscriptionStatus(@Param('channelId') channelId: string, @Req() req: any) {
+    return this.subscriptionsService.getSubscriptionStatus(channelId, req.user.userId);
+  }
 }
 
 

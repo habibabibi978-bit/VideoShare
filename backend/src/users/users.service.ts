@@ -240,6 +240,20 @@ export class UsersService {
     await this.watchHistoryRepository.delete({ userId: id });
   }
 
+  async deleteUserByEmail(email: string): Promise<{ success: boolean; message: string }> {
+    const user = await this.findByEmail(email);
+    if (!user) {
+      return { success: false, message: `User with email ${email} not found.` };
+    }
+
+    try {
+      await this.deleteAccount(user.id);
+      return { success: true, message: `Successfully deleted user ${email} and all related data.` };
+    } catch (error) {
+      return { success: false, message: `Error deleting user: ${error.message}` };
+    }
+  }
+
   async verifyEmail(userId: string, token: string): Promise<void> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
@@ -257,8 +271,8 @@ export class UsersService {
     }
 
     user.isEmailVerified = true;
-    user.emailVerificationToken = null as any;
-    user.emailVerificationExpires = null as any;
+    user.emailVerificationToken = null;
+    user.emailVerificationExpires = null;
     await this.userRepository.save(user);
   }
 }

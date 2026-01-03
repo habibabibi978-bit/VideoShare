@@ -15,6 +15,7 @@ import databaseConfig from './config/database.config';
 import { User } from './entities/user.entity';
 import { Video } from './entities/video.entity';
 import { Comment } from './entities/comment.entity';
+import { CommentLike } from './entities/comment-like.entity';
 import { Like } from './entities/like.entity';
 import { Subscription } from './entities/subscription.entity';
 import { WatchHistory } from './entities/watch-history.entity';
@@ -38,7 +39,7 @@ import { Playlist } from './entities/playlist.entity';
         database: configService.get<string>('database.database'),
         synchronize: configService.get<boolean>('database.synchronize'),
         logging: configService.get<boolean>('database.logging'),
-        entities: [User, Video, Comment, Like, Subscription, WatchHistory, Notification, Playlist],
+        entities: [User, Video, Comment, CommentLike, Like, Subscription, WatchHistory, Notification, Playlist],
       }),
       inject: [ConfigService],
     }),

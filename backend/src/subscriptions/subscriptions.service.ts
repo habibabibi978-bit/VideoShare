@@ -35,6 +35,7 @@ export class SubscriptionsService {
       const subscription = this.subscriptionRepository.create({
         subscriberId,
         channelId,
+        notificationsEnabled: true, // Default to enabled when subscribing
       });
       await this.subscriptionRepository.save(subscription);
       // Update subscribers count
@@ -43,8 +44,46 @@ export class SubscriptionsService {
         channel.subscribersCount = (channel.subscribersCount || 0) + 1;
         await this.userRepository.save(channel);
       }
-      return { subscribed: true };
+      return { subscribed: true, notificationsEnabled: true };
     }
+  }
+
+  async toggleNotifications(channelId: string, subscriberId: string) {
+    const subscription = await this.subscriptionRepository.findOne({
+      where: { subscriberId, channelId },
+    });
+
+    if (!subscription) {
+      throw new BadRequestException('Subscription not found');
+    }
+
+    subscription.notificationsEnabled = !subscription.notificationsEnabled;
+    await this.subscriptionRepository.save(subscription);
+    return { notificationsEnabled: subscription.notificationsEnabled };
+  }
+
+  async getSubscriptionStatus(channelId: string, subscriberId: string) {
+    const subscription = await this.subscriptionRepository.findOne({
+      where: { subscriberId, channelId },
+    });
+
+    if (!subscription) {
+      return { subscribed: false, notificationsEnabled: false };
+    }
+
+    return {
+      subscribed: true,
+      notificationsEnabled: subscription.notificationsEnabled,
+    };
+  }
+
+  async getSubscribersWithNotifications(channelId: string) {
+    const subscriptions = await this.subscriptionRepository.find({
+      where: { channelId, notificationsEnabled: true },
+      relations: ['subscriber'],
+    });
+
+    return subscriptions.map((sub) => sub.subscriber);
   }
 
   async getSubscribedChannels(userId: string) {
@@ -54,7 +93,10 @@ export class SubscriptionsService {
       order: { createdAt: 'DESC' },
     });
 
-    return subscriptions.map((sub) => sub.channel);
+    return subscriptions.map((sub) => ({
+      channel: sub.channel,
+      notificationsEnabled: sub.notificationsEnabled,
+    }));
   }
 
   async getSubscribers(channelId: string) {

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { login, signUp } from '../features/UserSlice';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import ErrorDialog from '../components/ErrorDialog';
 import SuccessDialog from '../components/SuccessDialog';
 import GoogleSignIn from '../components/GoogleSignIn';
 import Spinner from '../components/Spinner';
 import { AiOutlineEye, AiOutlineEyeInvisible } from 'react-icons/ai';
+import axiosInstance from '../utils/axiosInstance';
 
 function SignIn() {
   const [isLogin, setIsLogin] = useState(true);
@@ -19,6 +20,9 @@ function SignIn() {
   const [errorMessage, setErrorMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showResendVerification, setShowResendVerification] = useState(false);
+  const [resendEmail, setResendEmail] = useState('');
+  const [resendLoading, setResendLoading] = useState(false);
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -57,8 +61,25 @@ function SignIn() {
             setSuccessMessage('');
           }, 2000);
         } else if (result.type.includes('rejected')) {
-          const errorMsg = result.payload?.message || result.error?.message || 'Login failed. Please check your credentials.';
+          // Extract error message from various possible formats
+          let errorMsg = 'Login failed. Please check your credentials.';
+          
+          if (result.payload?.message) {
+            errorMsg = result.payload.message;
+          } else if (result.error?.message) {
+            errorMsg = result.error.message;
+          } else if (result.payload?.data?.message) {
+            errorMsg = result.payload.data.message;
+          }
+          
           setErrorMessage(errorMsg);
+          
+          // Check if error is about email verification
+          const lowerMsg = errorMsg.toLowerCase();
+          if (lowerMsg.includes('verify') || lowerMsg.includes('verification') || lowerMsg.includes('check your inbox')) {
+            setShowResendVerification(true);
+            setResendEmail(email);
+          }
         }
       });
     } else {
@@ -69,10 +90,13 @@ function SignIn() {
           setUsername('');
           setPassword('');
           setConfirmPassword('');
-          setSuccessMessage('Signup successful! Verify your email to login.');
+          const message = result.payload?.message || 'Signup successful! Please check your email to verify your account before logging in.';
+          setSuccessMessage(message);
+          setShowResendVerification(true);
+          setResendEmail(email);
           setTimeout(() => {
             setSuccessMessage('');
-          }, 2000);
+          }, 5000);
         } else if (result.type.includes('rejected')) {
           // Better error message extraction
           let errorMsg = 'Signup failed. Please try again.';
@@ -92,6 +116,28 @@ function SignIn() {
         console.error('Signup dispatch error:', error);
         setErrorMessage('An unexpected error occurred. Please try again.');
       });
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!resendEmail) {
+      setErrorMessage('Please enter your email address.');
+      return;
+    }
+
+    setResendLoading(true);
+    try {
+      const response = await axiosInstance.post('/auth/resend-verification', { email: resendEmail });
+      setSuccessMessage(response.data.message || 'Verification email sent! Please check your inbox.');
+      setShowResendVerification(false);
+      setTimeout(() => {
+        setSuccessMessage('');
+      }, 5000);
+    } catch (error) {
+      const errorMsg = error.response?.data?.message || error.message || 'Failed to send verification email. Please try again.';
+      setErrorMessage(errorMsg);
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -195,14 +241,56 @@ function SignIn() {
 
 
           </form>
+          
+          {/* Resend Verification Email Section */}
+          {showResendVerification && (
+            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-sm text-yellow-800 mb-2">
+                Your email needs to be verified before you can log in.
+              </p>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="email"
+                  value={resendEmail}
+                  onChange={(e) => setResendEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  className="flex-1 p-2 border border-gray-300 rounded text-sm"
+                />
+                <button
+                  onClick={handleResendVerification}
+                  disabled={resendLoading}
+                  className={`px-4 py-2 bg-primary text-white rounded text-sm hover:bg-primary-dark ${resendLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {resendLoading ? <Spinner loading={resendLoading} size={16} /> : 'Resend'}
+                </button>
+              </div>
+              <button
+                onClick={() => setShowResendVerification(false)}
+                className="mt-2 text-xs text-gray-600 hover:underline"
+              >
+                Close
+              </button>
+            </div>
+          )}
+
           <div className="mt-4 text-center">
             {isLogin ? (
-              <p>
-                Don't have an account?{' '}
-                <button onClick={() => setIsLogin(false)} className="text-primary hover:underline">
-                  Sign up
-                </button>
-              </p>
+              <>
+                <p>
+                  Don't have an account?{' '}
+                  <button onClick={() => setIsLogin(false)} className="text-primary hover:underline">
+                    Sign up
+                  </button>
+                </p>
+                <p className="mt-2">
+                  <button 
+                    onClick={() => navigate('/forgot-password')} 
+                    className="text-primary hover:underline text-sm"
+                  >
+                    Forgot Password?
+                  </button>
+                </p>
+              </>
             ) : (
               <p>
                 Already have an account?{' '}
