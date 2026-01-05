@@ -12,6 +12,8 @@ import {
   UploadedFiles,
   Req,
   BadRequestException,
+  InternalServerErrorException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -82,10 +84,61 @@ export class VideosController {
     return this.videosService.search(query, parseInt(page) || 1, parseInt(limit) || 20);
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get video by ID' })
-  async findById(@Param('id') id: string) {
-    return this.videosService.findById(id);
+  @Get('subscribedVideos')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get subscribed channels videos' })
+  async getSubscribedVideos(@Req() req: any, @Query('page') page: string, @Query('limit') limit: string) {
+    try {
+      console.log('getSubscribedVideos controller: Request received');
+      console.log('getSubscribedVideos controller: req.user:', req.user);
+      console.log('getSubscribedVideos controller: req.user?.userId:', req.user?.userId);
+      
+      if (!req.user || !req.user.userId) {
+        console.error('getSubscribedVideos controller: User authentication failed - req.user:', req.user);
+        throw new UnauthorizedException('User authentication required');
+      }
+      
+      const userId = req.user.userId;
+      const pageNum = parseInt(page) || 1;
+      const limitNum = parseInt(limit) || 20;
+      
+      console.log(`getSubscribedVideos controller: Calling service with userId: ${userId}, page: ${pageNum}, limit: ${limitNum}`);
+      
+      return await this.videosService.getSubscribedVideos(userId, pageNum, limitNum);
+    } catch (error) {
+      console.error('Error in getSubscribedVideos controller:', error);
+      console.error('Error message:', error.message);
+      console.error('Error name:', error.name);
+      console.error('Error stack:', error.stack);
+      console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+      
+      if (error instanceof UnauthorizedException || error instanceof BadRequestException) {
+        throw error;
+      }
+      
+      // Preserve the original error message with more context
+      let errorMessage = 'Failed to fetch subscribed videos';
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      console.error('Throwing InternalServerErrorException with message:', errorMessage);
+      console.error('Full error for debugging:', {
+        message: errorMessage,
+        originalError: error?.message,
+        name: error?.name,
+        stack: error?.stack?.substring(0, 500), // First 500 chars of stack
+      });
+      
+      // InternalServerErrorException - include detailed message
+      const detailedMessage = errorMessage || 'Unknown error occurred';
+      throw new InternalServerErrorException(detailedMessage);
+    }
   }
 
   @Get('related/:id')
@@ -94,12 +147,10 @@ export class VideosController {
     return this.videosService.findRelated(id, parseInt(limit) || 10);
   }
 
-  @Get('subscribedVideos')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get subscribed channels videos' })
-  async getSubscribedVideos(@Req() req: any, @Query('page') page: string, @Query('limit') limit: string) {
-    return this.videosService.getSubscribedVideos(req.user.userId, parseInt(page) || 1, parseInt(limit) || 20);
+  @Get(':id')
+  @ApiOperation({ summary: 'Get video by ID' })
+  async findById(@Param('id') id: string) {
+    return this.videosService.findById(id);
   }
 
   @Patch('incrementViewCount/:id')

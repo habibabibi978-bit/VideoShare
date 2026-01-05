@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like as TypeOrmLike, In, Not } from 'typeorm';
@@ -149,45 +150,148 @@ export class VideosService {
   }
 
   async search(query: string, page: number = 1, limit: number = 20) {
-    const skip = (page - 1) * limit;
-    const searchPattern = `%${query}%`;
-
-    const queryBuilder = this.videoRepository.createQueryBuilder('video')
-      .leftJoinAndSelect('video.owner', 'owner')
-      .where('video.isPublished = :isPublished', { isPublished: true })
-      .andWhere(
-        '(video.title ILIKE :query OR video.description ILIKE :query OR video.tags::text ILIKE :query)',
-        { query: searchPattern }
-      )
-      .orderBy('video.createdAt', 'DESC')
-      .skip(skip)
-      .take(limit);
-
-    const [videos, total] = await queryBuilder.getManyAndCount();
-
-    return { videos, total, page, limit };
-  }
-
-  async getSubscribedVideos(userId: string, page: number = 1, limit: number = 20) {
-    const skip = (page - 1) * limit;
-    const subscriptions = await this.subscriptionRepository.find({
-      where: { subscriberId: userId },
-    });
-    const channelIds = subscriptions.map((sub) => sub.channelId);
-
-    if (channelIds.length === 0) {
+    if (!query || query.trim() === '') {
       return { videos: [], total: 0, page, limit };
     }
 
-    const [videos, total] = await this.videoRepository.findAndCount({
-      where: { ownerId: In(channelIds), isPublished: true },
-      relations: ['owner'],
-      order: { createdAt: 'DESC' },
-      skip,
-      take: limit,
-    });
+    const skip = (page - 1) * limit;
+    const trimmedQuery = query.trim();
+    const searchPattern = `%${trimmedQuery}%`;
 
-    return { videos, total, page, limit };
+    console.log(`🔍 Searching for: "${trimmedQuery}"`);
+
+    try {
+      const queryBuilder = this.videoRepository.createQueryBuilder('video')
+        .leftJoinAndSelect('video.owner', 'owner')
+        .where('video.isPublished = :isPublished', { isPublished: true })
+        .andWhere(
+          `(
+            video.title ILIKE :query OR 
+            video.description ILIKE :query OR 
+            owner.username ILIKE :query OR 
+            COALESCE(owner.fullname, '') ILIKE :query OR
+            EXISTS (SELECT 1 FROM unnest(video.tags) AS tag WHERE tag ILIKE :query)
+          )`,
+          { query: searchPattern }
+        )
+        .orderBy('video.createdAt', 'DESC')
+        .skip(skip)
+        .take(limit);
+
+      const [videos, total] = await queryBuilder.getManyAndCount();
+
+      console.log(`✅ Search found ${total} videos for query: "${trimmedQuery}"`);
+      if (videos.length > 0) {
+        console.log(`   Sample titles: ${videos.slice(0, 3).map(v => v.title).join(', ')}`);
+      }
+
+      return { videos, total, page, limit };
+    } catch (error) {
+      console.error('❌ Search error:', error);
+      // Fallback to simpler search if array unnest fails
+      const queryBuilder = this.videoRepository.createQueryBuilder('video')
+        .leftJoinAndSelect('video.owner', 'owner')
+        .where('video.isPublished = :isPublished', { isPublished: true })
+        .andWhere(
+          `(
+            video.title ILIKE :query OR 
+            video.description ILIKE :query OR 
+            owner.username ILIKE :query OR
+            COALESCE(owner.fullname, '') ILIKE :query
+          )`,
+          { query: searchPattern }
+        )
+        .orderBy('video.createdAt', 'DESC')
+        .skip(skip)
+        .take(limit);
+
+      const [videos, total] = await queryBuilder.getManyAndCount();
+      console.log(`✅ Fallback search found ${total} videos for query: "${trimmedQuery}"`);
+      return { videos, total, page, limit };
+    }
+  }
+
+  async getSubscribedVideos(userId: string, page: number = 1, limit: number = 20) {
+    try {
+      if (!userId) {
+        console.error('getSubscribedVideos: User ID is missing');
+        throw new BadRequestException('User ID is required');
+      }
+
+      console.log(`getSubscribedVideos: Fetching videos for user ${userId}, page ${page}, limit ${limit}`);
+      const skip = (page - 1) * limit;
+      
+      // Find all subscriptions for this user
+      let subscriptions;
+      try {
+        subscriptions = await this.subscriptionRepository.find({
+          where: { subscriberId: userId },
+        });
+        console.log(`getSubscribedVideos: Found ${subscriptions.length} subscriptions`);
+      } catch (subError) {
+        console.error('getSubscribedVideos: Error fetching subscriptions:', subError);
+        throw new BadRequestException(`Failed to fetch subscriptions: ${subError.message}`);
+      }
+      
+      const channelIds = subscriptions
+        .map((sub) => sub?.channelId)
+        .filter(id => {
+          // Filter out null, undefined, empty strings, and ensure it's a valid UUID format
+          if (!id || id === '' || typeof id !== 'string') {
+            return false;
+          }
+          // Basic UUID format check (8-4-4-4-12 hex characters)
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          return uuidRegex.test(id);
+        });
+
+      if (channelIds.length === 0) {
+        console.log('getSubscribedVideos: No subscriptions found, returning empty array');
+        return { videos: [], total: 0, page, limit };
+      }
+
+      console.log(`getSubscribedVideos: Fetching videos from ${channelIds.length} channels`);
+      console.log(`getSubscribedVideos: Channel IDs:`, channelIds);
+      
+      try {
+        console.log('getSubscribedVideos: Starting database query...');
+        console.log('getSubscribedVideos: Channel IDs array:', JSON.stringify(channelIds));
+        console.log('getSubscribedVideos: Channel IDs length:', channelIds.length);
+        
+        // Use findAndCount with In() operator - more reliable than query builder
+        console.log('getSubscribedVideos: Using findAndCount with In() operator');
+        console.log('getSubscribedVideos: Channel IDs for query:', channelIds);
+        
+        const [videos, total] = await this.videoRepository.findAndCount({
+          where: {
+            ownerId: In(channelIds),
+            isPublished: true,
+          },
+          relations: ['owner'],
+          order: { createdAt: 'DESC' },
+          skip,
+          take: limit,
+        });
+        
+        console.log(`getSubscribedVideos: Query successful - Found ${videos.length} videos out of ${total} total`);
+        return { videos, total, page, limit };
+      } catch (queryError) {
+        console.error('getSubscribedVideos: Database query failed:', queryError);
+        console.error('getSubscribedVideos: Query error message:', queryError.message);
+        console.error('getSubscribedVideos: Query error name:', queryError.name);
+        console.error('getSubscribedVideos: Query error code:', (queryError as any).code);
+        console.error('getSubscribedVideos: Query error stack:', queryError.stack);
+        
+        // Re-throw the original error to preserve the stack trace
+        throw queryError;
+      }
+
+    } catch (error) {
+      console.error('Error in getSubscribedVideos:', error);
+      console.error('Error stack:', error.stack);
+      // Re-throw the error so it can be handled by the controller
+      throw error;
+    }
   }
 
   async incrementViewCount(id: string) {
